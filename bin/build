@@ -1,0 +1,21 @@
+#! /bin/bash
+
+name=$(cat Cargo.toml | grep "^name = " | cut -d '"' -f 2)
+version=$(cat Cargo.toml | grep "^version = " | cut -d '"' -f 2)
+full_sha=$(git rev-parse HEAD)
+sha=${full_sha:0:7}
+build_version="$version ($sha)"
+
+echo "Building $name $build_version"
+
+BUILD_SHA="$sha" BUILD_VERSION="$build_version" cargo build --release
+
+cd target/release
+
+tar="$name-$version-$sha.tar.gz"
+
+tar -czf $tar $name
+
+sha256=$(sha256sum $tar)
+
+echo "Built $tar with SHA256 $sha256"

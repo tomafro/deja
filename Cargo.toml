@@ -1,0 +1,17 @@
+[package]
+name = "deja"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anstyle = "1.0.6"
+clap = { version = "4.4.11", features = ["cargo", "string", "env", "color"] }
+clap_complete = "4.4.9"
+dirs = "5.0.1"
+humantime = "2.1.0"
+merkle_hash = "3.5"
+ron = { version = "0.8.1", features = ["integer128"] }
+serde = { version = "1", features = ["derive"] }
+whoami = "1.4.1"

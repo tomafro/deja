@@ -1,0 +1,51 @@
+deja() {
+  run --separate-stderr -- $deja_bin "$@"
+}
+
+deja_setup() {
+  load '../../vendor/bats-support/load'
+  load '../../vendor/bats-assert/load'
+  bats_require_minimum_version 1.5.0
+
+  deja_bin="$(which deja)"
+
+  mkdir -p tmp/bats
+  chmod -R 700 tmp/bats
+  rm -rf tmp/bats/*
+  export WORKSPACE=$PWD/tmp/bats/test
+  mkdir -p "$WORKSPACE"
+  export DEJA_CACHE=$PWD/tmp/bats/cache
+}
+
+assert_uuid() {
+  assert_regex "$1" "[A-z0-9]+-[A-z0-9]+-[A-z0-9]+-[A-z0-9]+-[A-z0-9]+"
+}
+
+assert_success_with_uuid() {
+  assert_success
+  assert_uuid "$output"
+}
+
+assert_success_with_uuid_matching() {
+  assert_success
+  assert_equal "$output" "$1"
+  assert_uuid "$1"
+  assert_uuid "$output"
+}
+
+assert_success_with_uuid_not_matching() {
+  assert_success
+  assert_not_equal "$output" "$1"
+  assert_uuid "$1"
+  assert_uuid "$output"
+}
+
+assert_handled_failure() {
+  assert_failure
+  refute_regex "$stderr" "thread 'main' panicked"
+}
+
+folder_fixture() {
+  mkdir -p "$WORKSPACE/$1"
+  echo "$WORKSPACE/$1"
+}
