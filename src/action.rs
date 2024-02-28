@@ -1,41 +1,10 @@
 use crate::cache::Cache;
+use crate::cache::CacheResult;
 use crate::command::Command;
-use crate::command::CommandResult;
 use crate::error;
 use std::ops::Add;
 use std::time::Duration;
 use std::time::SystemTime;
-
-use crate::debug;
-
-fn find_command_result(
-    cmd: &Command,
-    cache: &impl Cache,
-    look_back: Option<Duration>,
-) -> Option<CommandResult> {
-    let now = SystemTime::now();
-
-    debug(format!("looking for {} in cache", &cmd.hash));
-    if let Some(cache_entry) = cache.read(&cmd.hash) {
-        debug(format!("found {} in cache, checking freshness", &cmd.hash));
-        if cache_entry.expires.unwrap_or(now) >= now {
-            if look_back.is_none() || cache_entry.created.add(look_back.unwrap()) >= now {
-                debug(format!("{} is fresh, returning", &cmd.hash));
-                return Some(cache_entry);
-            }
-            debug(format!(
-                "{} isn't recent enough for --look-back, discarding",
-                &cmd.hash
-            ));
-        } else {
-            debug(format!("{} has expired, discarding", &cmd.hash));
-        }
-    } else {
-        debug(format!("{} not found in cache", &cmd.hash));
-    }
-
-    None
-}
 
 fn record(
     cmd: &mut Command,
@@ -54,7 +23,7 @@ pub fn run(
     look_back: Option<Duration>,
     cache_for: Option<Duration>,
 ) -> Result<i32, error::Error> {
-    if let Some(result) = find_command_result(cmd, cache, look_back) {
+    if let CacheResult::Fresh(result) = cache.result(&cmd.hash, look_back, None) {
         Ok(result.replay())
     } else {
         record(cmd, cache, cache_for)
@@ -66,7 +35,7 @@ pub fn read(
     cache: &impl Cache,
     look_back: Option<Duration>,
 ) -> Result<i32, error::Error> {
-    if let Some(result) = find_command_result(cmd, cache, look_back) {
+    if let CacheResult::Fresh(result) = cache.result(&cmd.hash, look_back, None) {
         Ok(result.replay())
     } else {
         Ok(1)
@@ -89,7 +58,7 @@ pub fn explain(
 ) -> Result<i32, error::Error> {
     println!("{}", cmd.scope.explanation().explain());
 
-    if let Some(result) = find_command_result(cmd, cache, look_back) {
+    if let CacheResult::Fresh(result) = cache.result(&cmd.hash, look_back, None) {
         println!("{:?}", result);
     }
     Ok(0)
@@ -100,7 +69,7 @@ pub fn test(
     cache: &impl Cache,
     look_back: Option<Duration>,
 ) -> Result<i32, error::Error> {
-    if let Some(result) = find_command_result(cmd, cache, look_back) {
+    if let CacheResult::Fresh(result) = cache.result(&cmd.hash, look_back, None) {
         println!("{:?}", result);
         Ok(0)
     } else {

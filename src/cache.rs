@@ -1,12 +1,47 @@
 use crate::command::CommandResult;
 use crate::debug;
 use std::io::BufReader;
+use std::ops::Add;
 use std::path::PathBuf;
+use std::time::{Duration, SystemTime};
+
+pub enum CacheResult {
+    Fresh(CommandResult),
+    Stale(SystemTime),
+    Expired(SystemTime),
+    Missing,
+}
 
 pub trait Cache {
     fn read(&self, hash: &String) -> Option<CommandResult>;
     fn write(&self, hash: &String, result: &CommandResult) -> Result<(), crate::error::Error>;
     fn remove(&self, hash: &String) -> bool;
+    fn result(
+        &self,
+        hash: &String,
+        look_back: Option<Duration>,
+        now: Option<SystemTime>,
+    ) -> CacheResult {
+        if let Some(result) = self.read(hash) {
+            let now = now.unwrap_or(SystemTime::now());
+
+            if let Some(expires_at) = result.expires {
+                if expires_at < now {
+                    return CacheResult::Expired(expires_at);
+                }
+            }
+
+            if let Some(look_back) = look_back {
+                if result.created.add(look_back) < now {
+                    return CacheResult::Stale(result.created);
+                }
+            }
+
+            CacheResult::Fresh(result)
+        } else {
+            CacheResult::Missing
+        }
+    }
 }
 
 pub struct DiskCache {
@@ -35,9 +70,10 @@ impl Cache for DiskCache {
             let file = std::fs::File::open(path).unwrap();
             let reader = BufReader::new(file);
             let result: CommandResult = ron::de::from_reader(reader).unwrap();
-            return Some(result);
+            Some(result)
+        } else {
+            None
         }
-        None
     }
 
     fn write(&self, hash: &String, result: &CommandResult) -> Result<(), crate::error::Error> {
