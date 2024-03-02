@@ -58,9 +58,27 @@ pub fn explain(
 ) -> Result<i32, error::Error> {
     println!("{}", cmd.scope.explanation().explain());
 
-    if let CacheResult::Fresh(result) = cache.result(&cmd.hash, look_back, None) {
-        println!("{:?}", result);
+    match cache.result(&cmd.hash, look_back, None) {
+        CacheResult::Fresh(_) => {
+            println!("Available in cache");
+        }
+        CacheResult::Stale(created) => {
+            println!(
+                "Stale: entry in cache created {} seconds ago",
+                created.elapsed().unwrap().as_secs()
+            );
+        }
+        CacheResult::Expired(expires_at) => {
+            println!(
+                "Expired: entry in cache expired {} seconds ago",
+                expires_at.elapsed().unwrap().as_secs()
+            );
+        }
+        CacheResult::Missing => {
+            println!("Missing from cache");
+        }
     }
+
     Ok(0)
 }
 

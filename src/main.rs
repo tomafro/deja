@@ -9,6 +9,7 @@ use crate::command::Command;
 use clap::value_parser;
 use clap::Arg;
 use std::collections::HashMap;
+use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -182,11 +183,17 @@ fn collect_matches(
         .unwrap_or_default()
         .map(|s| s.into())
         .collect::<Vec<String>>();
-    let watch_paths = matches
+    let mut watch_paths = matches
         .get_many::<PathBuf>("watch-path")
         .unwrap_or_default()
         .map(|s| s.into())
         .collect::<Vec<PathBuf>>();
+
+    watch_paths = watch_paths
+        .iter()
+        .map(|path| std::fs::canonicalize(path).unwrap())
+        .collect::<Vec<PathBuf>>();
+
     let watch_scope = matches
         .get_many::<String>("watch-scope")
         .unwrap_or_default()
