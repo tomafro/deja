@@ -8,6 +8,7 @@ use crate::cache::Cache;
 use crate::command::Command;
 use clap::value_parser;
 use clap::Arg;
+use command::ScopeBuilder;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -214,7 +215,7 @@ fn collect_matches(
     let exclude_pwd = matches.get_flag("exclude-pwd");
     let exclude_user = matches.get_flag("exclude-user");
 
-    let mut scope = command::Scope::new()
+    let mut scope = ScopeBuilder::new()
         .cmd(cmd.to_string())
         .args(args)
         .watch_paths(watch_paths)
@@ -264,7 +265,7 @@ fn collect_matches(
     let cache_dir = matches.get_one::<PathBuf>("cache").unwrap();
     let cache = cache::DiskCache::new(cache_dir.clone());
 
-    Ok((Command::new(scope), cache, look_back, cache_for))
+    Ok((Command::new(scope.build()?), cache, look_back, cache_for))
 }
 
 fn run() -> Result<i32, crate::error::Error> {

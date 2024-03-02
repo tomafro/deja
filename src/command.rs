@@ -36,7 +36,7 @@ where
 }
 
 #[derive(Debug, Deserialize, Serialize, Default, Clone)]
-pub struct Scope {
+pub struct ScopeBuilder {
     pub format: String,
     pub cmd: String,
     pub args: Vec<String>,
@@ -47,9 +47,9 @@ pub struct Scope {
     pub watch_env: HashMap<String, String>,
 }
 
-impl Scope {
-    pub fn new() -> Scope {
-        Scope {
+impl ScopeBuilder {
+    pub fn new() -> Self {
+        ScopeBuilder {
             format: env!("CARGO_PKG_VERSION").to_string(),
             ..Default::default()
         }
@@ -90,7 +90,7 @@ impl Scope {
         self
     }
 
-    pub fn hash(&self) -> String {
+    pub fn hash(&self) -> Result<String, error::Error> {
         let format_hash = hash::Hash::from(&self.format);
         let cmd_hash = hash::Hash::from(&self.cmd);
         let args_hash = hash::Hash::from(&self.args);
@@ -98,7 +98,7 @@ impl Scope {
         let pwd_hash = hash::Hash::from(&self.pwd);
         let watch_scope_hash = hash::Hash::from(&self.watch_scope);
         let watch_env_hash = hash::Hash::from(&self.watch_env);
-        let watch_paths_hash = hash::Hash::try_from(&self.watch_paths).unwrap();
+        let watch_paths_hash = hash::Hash::try_from(&self.watch_paths)?;
         let hash = hash::Hash::from(&vec![
             format_hash,
             cmd_hash,
@@ -109,9 +109,38 @@ impl Scope {
             watch_env_hash,
             watch_paths_hash,
         ]);
-        hash.hex()
+        Ok(hash.hex())
     }
 
+    pub fn build(self) -> Result<Scope, error::Error> {
+        Ok(Scope {
+            hash: self.hash()?,
+            format: self.format,
+            cmd: self.cmd,
+            args: self.args,
+            user: self.user,
+            pwd: self.pwd,
+            watch_paths: self.watch_paths,
+            watch_scope: self.watch_scope,
+            watch_env: self.watch_env,
+        })
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, Default, Clone)]
+pub struct Scope {
+    pub format: String,
+    pub cmd: String,
+    pub args: Vec<String>,
+    pub user: Option<String>,
+    pub pwd: Option<OsString>,
+    pub watch_paths: Vec<PathBuf>,
+    pub watch_scope: Vec<String>,
+    pub watch_env: HashMap<String, String>,
+    pub hash: String,
+}
+
+impl Scope {
     pub fn explanation(&self) -> ScopeExplanation {
         ScopeExplanation { scope: self }
     }
@@ -192,13 +221,11 @@ impl<'a> ScopeExplanation<'a> {
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Command {
     pub scope: Scope,
-    pub hash: String,
 }
 
 impl Command {
     pub fn new(scope: Scope) -> Self {
-        let hash = scope.hash();
-        Command { scope, hash }
+        Command { scope }
     }
 
     pub fn run(&mut self) -> Result<CommandResult, crate::error::Error> {

@@ -3,6 +3,8 @@ use std::{collections::HashMap, ffi::OsString, os::unix::ffi::OsStrExt, path::Pa
 use merkle_hash::{Algorithm, MerkleTree};
 use serde::{Deserialize, Serialize};
 
+use crate::error;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Hash {
     hash: Vec<u8>,
@@ -63,7 +65,7 @@ impl From<&std::option::Option<OsString>> for Hash {
 }
 
 impl TryFrom<&PathBuf> for Hash {
-    type Error = std::io::Error;
+    type Error = error::Error;
 
     fn try_from(path: &PathBuf) -> Result<Self, Self::Error> {
         Ok(Hash {
@@ -109,14 +111,15 @@ impl From<&Vec<Hash>> for Hash {
 }
 
 impl TryFrom<&Vec<PathBuf>> for Hash {
-    type Error = std::io::Error;
+    type Error = error::Error;
 
     fn try_from(paths: &Vec<PathBuf>) -> Result<Self, Self::Error> {
         let hashes = paths
             .iter()
-            .map(|p| Hash::try_from(p).unwrap())
-            .collect::<Vec<Hash>>();
-        Ok(Hash::from(&hashes))
+            .map(|p| Hash::try_from(p))
+            .collect::<Result<Vec<Hash>, Self::Error>>();
+
+        Ok(Hash::from(&hashes?))
     }
 }
 

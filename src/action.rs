@@ -13,7 +13,7 @@ fn record(
 ) -> Result<i32, error::Error> {
     let mut result = cmd.run()?;
     result.expires = cache_for.map(|d| SystemTime::now().add(d));
-    cache.write(&cmd.hash, &result)?;
+    cache.write(&cmd.scope.hash, &result)?;
     Ok(result.status)
 }
 
@@ -23,7 +23,7 @@ pub fn run(
     look_back: Option<Duration>,
     cache_for: Option<Duration>,
 ) -> Result<i32, error::Error> {
-    if let CacheResult::Fresh(result) = cache.result(&cmd.hash, look_back, None) {
+    if let CacheResult::Fresh(result) = cache.result(&cmd.scope.hash, look_back, None) {
         Ok(result.replay())
     } else {
         record(cmd, cache, cache_for)
@@ -35,7 +35,7 @@ pub fn read(
     cache: &impl Cache,
     look_back: Option<Duration>,
 ) -> Result<i32, error::Error> {
-    if let CacheResult::Fresh(result) = cache.result(&cmd.hash, look_back, None) {
+    if let CacheResult::Fresh(result) = cache.result(&cmd.scope.hash, look_back, None) {
         Ok(result.replay())
     } else {
         Ok(1)
@@ -58,7 +58,7 @@ pub fn explain(
 ) -> Result<i32, error::Error> {
     println!("{}", cmd.scope.explanation().explain());
 
-    match cache.result(&cmd.hash, look_back, None) {
+    match cache.result(&cmd.scope.hash, look_back, None) {
         CacheResult::Fresh(_) => {
             println!("Available in cache");
         }
@@ -87,7 +87,7 @@ pub fn test(
     cache: &impl Cache,
     look_back: Option<Duration>,
 ) -> Result<i32, error::Error> {
-    if let CacheResult::Fresh(result) = cache.result(&cmd.hash, look_back, None) {
+    if let CacheResult::Fresh(result) = cache.result(&cmd.scope.hash, look_back, None) {
         println!("{:?}", result);
         Ok(0)
     } else {
@@ -96,7 +96,7 @@ pub fn test(
 }
 
 pub fn remove(cmd: &mut Command, cache: &impl Cache) -> Result<i32, error::Error> {
-    if cache.remove(&cmd.hash) {
+    if cache.remove(&cmd.scope.hash) {
         Ok(0)
     } else {
         Ok(1)
