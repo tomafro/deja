@@ -62,9 +62,11 @@ impl From<&std::option::Option<OsString>> for Hash {
     }
 }
 
-impl From<&PathBuf> for Hash {
-    fn from(path: &PathBuf) -> Self {
-        Hash {
+impl TryFrom<&PathBuf> for Hash {
+    type Error = std::io::Error;
+
+    fn try_from(path: &PathBuf) -> Result<Self, Self::Error> {
+        Ok(Hash {
             hash: MerkleTree::builder(path.to_str().unwrap())
                 .hash_names(true)
                 .build()
@@ -72,7 +74,7 @@ impl From<&PathBuf> for Hash {
                 .root
                 .item
                 .hash,
-        }
+        })
     }
 }
 
@@ -106,10 +108,15 @@ impl From<&Vec<Hash>> for Hash {
     }
 }
 
-impl From<&Vec<PathBuf>> for Hash {
-    fn from(paths: &Vec<PathBuf>) -> Self {
-        let hashes = paths.iter().map(|p| Hash::from(p)).collect::<Vec<Hash>>();
-        Hash::from(&hashes)
+impl TryFrom<&Vec<PathBuf>> for Hash {
+    type Error = std::io::Error;
+
+    fn try_from(paths: &Vec<PathBuf>) -> Result<Self, Self::Error> {
+        let hashes = paths
+            .iter()
+            .map(|p| Hash::try_from(p).unwrap())
+            .collect::<Vec<Hash>>();
+        Ok(Hash::from(&hashes))
     }
 }
 
@@ -185,15 +192,19 @@ mod test {
     }
 
     #[test]
-    fn test_from_path() {
+    fn test_try_from_path() {
         assert_eq!(
             "a68f00ba89c19bbbfef24d6fe1e3dc7ca11758b1faba5d281c6865e96c45fd3d",
-            Hash::from(&Path::new("test/fixtures/empty-a.txt").to_path_buf()).hex()
+            Hash::try_from(&Path::new("test/fixtures/empty-a.txt").to_path_buf())
+                .unwrap()
+                .hex()
         );
 
         assert_eq!(
             "1cef27a2b5ed833e052e5e171757f4d4fe7d24354f5dfa594dfc17a16645bf4b",
-            Hash::from(&Path::new("test/fixtures/empty-b.txt").to_path_buf()).hex()
+            Hash::try_from(&Path::new("test/fixtures/empty-b.txt").to_path_buf())
+                .unwrap()
+                .hex()
         );
     }
 }

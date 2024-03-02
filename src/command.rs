@@ -98,7 +98,7 @@ impl Scope {
         let pwd_hash = hash::Hash::from(&self.pwd);
         let watch_scope_hash = hash::Hash::from(&self.watch_scope);
         let watch_env_hash = hash::Hash::from(&self.watch_env);
-        let watch_paths_hash = hash::Hash::from(&self.watch_paths);
+        let watch_paths_hash = hash::Hash::try_from(&self.watch_paths).unwrap();
         let hash = hash::Hash::from(&vec![
             format_hash,
             cmd_hash,
@@ -157,7 +157,12 @@ impl<'a> ScopeExplanation<'a> {
             result.push_str("paths:\n");
             for path in &self.scope.watch_paths {
                 result.push_str(
-                    format!("  {}: {}\n", path.to_string_lossy(), Hash::from(path)).as_str(),
+                    format!(
+                        "  {}: {}\n",
+                        path.to_string_lossy(),
+                        Hash::try_from(path).unwrap()
+                    )
+                    .as_str(),
                 );
             }
         }

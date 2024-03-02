@@ -9,7 +9,6 @@ use crate::command::Command;
 use clap::value_parser;
 use clap::Arg;
 use std::collections::HashMap;
-use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
 
