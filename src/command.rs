@@ -1,4 +1,4 @@
-use crate::error;
+use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::ffi::OsString;
@@ -90,7 +90,7 @@ impl ScopeBuilder {
         self
     }
 
-    pub fn hash(&self) -> Result<String, error::Error> {
+    pub fn hash(&self) -> anyhow::Result<String> {
         let format_hash = hash::Hash::from(&self.format);
         let cmd_hash = hash::Hash::from(&self.cmd);
         let args_hash = hash::Hash::from(&self.args);
@@ -112,7 +112,7 @@ impl ScopeBuilder {
         Ok(hash.hex())
     }
 
-    pub fn build(self) -> Result<Scope, error::Error> {
+    pub fn build(self) -> anyhow::Result<Scope> {
         Ok(Scope {
             hash: self.hash()?,
             format: self.format,
@@ -228,7 +228,7 @@ impl Command {
         Command { scope }
     }
 
-    pub fn run(&mut self) -> Result<CommandResult, crate::error::Error> {
+    pub fn run(&mut self) -> anyhow::Result<CommandResult> {
         let mut child = std::process::Command::new(&self.scope.cmd)
             .args(&self.scope.args)
             .stdout(Stdio::piped())
@@ -246,7 +246,7 @@ impl Command {
                     _ => format!("error running command: {}", self.scope.cmd),
                 };
 
-                error::anticipated(&message, status)
+                anyhow!("{}", message)
             })?;
 
         let at = SystemTime::now();

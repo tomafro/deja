@@ -207,6 +207,7 @@ name = "deja"
 version = "0.1.0"
 dependencies = [
  "anstyle",
+ "anyhow",
  "clap",
  "clap_complete",
  "dirs",

@@ -1,7 +1,6 @@
 use crate::cache::Cache;
 use crate::cache::CacheResult;
 use crate::command::Command;
-use crate::error;
 use std::ops::Add;
 use std::time::Duration;
 use std::time::SystemTime;
@@ -10,7 +9,7 @@ fn record(
     cmd: &mut Command,
     cache: &impl Cache,
     cache_for: Option<Duration>,
-) -> Result<i32, error::Error> {
+) -> anyhow::Result<i32> {
     let mut result = cmd.run()?;
     result.expires = cache_for.map(|d| SystemTime::now().add(d));
     cache.write(&cmd.scope.hash, &result)?;
@@ -22,7 +21,7 @@ pub fn run(
     cache: &impl Cache,
     look_back: Option<Duration>,
     cache_for: Option<Duration>,
-) -> Result<i32, error::Error> {
+) -> anyhow::Result<i32> {
     if let CacheResult::Fresh(result) = cache.result(&cmd.scope.hash, look_back, None) {
         Ok(result.replay())
     } else {
@@ -34,7 +33,7 @@ pub fn read(
     cmd: &mut Command,
     cache: &impl Cache,
     look_back: Option<Duration>,
-) -> Result<i32, error::Error> {
+) -> anyhow::Result<i32> {
     if let CacheResult::Fresh(result) = cache.result(&cmd.scope.hash, look_back, None) {
         Ok(result.replay())
     } else {
@@ -46,7 +45,7 @@ pub fn force(
     cmd: &mut Command,
     cache: &impl Cache,
     cache_for: Option<Duration>,
-) -> Result<i32, error::Error> {
+) -> anyhow::Result<i32> {
     record(cmd, cache, cache_for)?;
     Ok(0)
 }
@@ -55,7 +54,7 @@ pub fn explain(
     cmd: &mut Command,
     cache: &impl Cache,
     look_back: Option<Duration>,
-) -> Result<i32, error::Error> {
+) -> anyhow::Result<i32> {
     println!("{}", cmd.scope.explanation().explain());
 
     match cache.result(&cmd.scope.hash, look_back, None) {
@@ -86,7 +85,7 @@ pub fn test(
     cmd: &mut Command,
     cache: &impl Cache,
     look_back: Option<Duration>,
-) -> Result<i32, error::Error> {
+) -> anyhow::Result<i32> {
     if let CacheResult::Fresh(result) = cache.result(&cmd.scope.hash, look_back, None) {
         println!("{:?}", result);
         Ok(0)
@@ -95,7 +94,7 @@ pub fn test(
     }
 }
 
-pub fn remove(cmd: &mut Command, cache: &impl Cache) -> Result<i32, error::Error> {
+pub fn remove(cmd: &mut Command, cache: &impl Cache) -> anyhow::Result<i32> {
     if cache.remove(&cmd.scope.hash) {
         Ok(0)
     } else {

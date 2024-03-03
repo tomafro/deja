@@ -1,3 +1,5 @@
+use anyhow::{anyhow, Error};
+
 use crate::command::CommandResult;
 use crate::debug;
 use std::io::BufReader;
@@ -14,7 +16,7 @@ pub enum CacheResult {
 
 pub trait Cache {
     fn read(&self, hash: &String) -> Option<CommandResult>;
-    fn write(&self, hash: &String, result: &CommandResult) -> Result<(), crate::error::Error>;
+    fn write(&self, hash: &String, result: &CommandResult) -> anyhow::Result<()>;
     fn remove(&self, hash: &String) -> bool;
     fn result(
         &self,
@@ -58,8 +60,9 @@ impl DiskCache {
     }
 }
 
-pub fn unable_to_write_to_cache_error(path: &PathBuf) -> crate::error::Error {
-    crate::error::anticipated(&format!("unable to write to cache {}", path.display()), 1)
+pub fn unable_to_write_to_cache_error(path: &PathBuf) -> Error {
+    anyhow!("unable to write to cache {}", path.display())
+    //crate::error::anticipated(&format!("unable to write to cache {}", path.display()), 1)
 }
 
 impl Cache for DiskCache {
@@ -76,7 +79,7 @@ impl Cache for DiskCache {
         }
     }
 
-    fn write(&self, hash: &String, result: &CommandResult) -> Result<(), crate::error::Error> {
+    fn write(&self, hash: &String, result: &CommandResult) -> anyhow::Result<()> {
         let path = self.path(hash);
         debug(format!("cache write: {}, {}", hash, path.display()));
         let parent = path

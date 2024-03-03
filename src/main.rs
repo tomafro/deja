@@ -1,11 +1,11 @@
 mod action;
 mod cache;
 mod command;
-mod error;
 mod hash;
 
 use crate::cache::Cache;
 use crate::command::Command;
+use anyhow::anyhow;
 use clap::value_parser;
 use clap::Arg;
 use command::ScopeBuilder;
@@ -147,7 +147,7 @@ pub fn styles() -> clap::builder::Styles {
         )
 }
 
-fn cli() -> Result<clap::Command, crate::error::Error> {
+fn cli() -> anyhow::Result<clap::Command> {
     Ok(clap::command!()
         .name("deja")
         .arg_required_else_help(true)
@@ -171,13 +171,10 @@ fn cli() -> Result<clap::Command, crate::error::Error> {
 
 fn collect_matches(
     matches: &clap::ArgMatches,
-) -> Result<(Command, impl Cache, Option<Duration>, Option<Duration>), crate::error::Error> {
+) -> anyhow::Result<(Command, impl Cache, Option<Duration>, Option<Duration>)> {
     let cmd = matches
         .get_one::<String>("command")
-        .ok_or(error::anticipated(
-            "unexpected failure to parse arguments",
-            1,
-        ))?;
+        .ok_or(anyhow!("unexpected failure to parse arguments"))?;
     let args = matches
         .get_many::<String>("arguments")
         .unwrap_or_default()
@@ -234,12 +231,9 @@ fn collect_matches(
 
     let look_back = if let Some(s) = look_back_arg {
         Some(humantime::parse_duration(s).map_err(|_| {
-            error::anticipated(
-                &format!(
-                    "invalid duration '{}', use values like 15s, 30m, 3h, 4d etc",
-                    s
-                ),
-                1,
+            anyhow!(
+                "invalid duration '{}', use values like 15s, 30m, 3h, 4d etc",
+                s
             )
         })?)
     } else {
@@ -250,12 +244,9 @@ fn collect_matches(
 
     let cache_for = if let Some(s) = cache_for_arg {
         Some(humantime::parse_duration(s).map_err(|_| {
-            error::anticipated(
-                &format!(
-                    "invalid duration '{}', use values like 15s, 30m, 3h, 4d etc",
-                    s
-                ),
-                1,
+            anyhow!(
+                "invalid duration '{}', use values like 15s, 30m, 3h, 4d etc",
+                s
             )
         })?)
     } else {
@@ -263,12 +254,13 @@ fn collect_matches(
     };
 
     let cache_dir = matches.get_one::<PathBuf>("cache").unwrap();
+
     let cache = cache::DiskCache::new(cache_dir.clone());
 
     Ok((Command::new(scope.build()?), cache, look_back, cache_for))
 }
 
-fn run() -> Result<i32, crate::error::Error> {
+fn run() -> anyhow::Result<i32> {
     let matches = cli()?.get_matches();
 
     DEBUG.set(matches.get_flag("debug")).unwrap();
@@ -307,10 +299,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(status) => {
             std::process::exit(status);
         }
-        Err(crate::error::Error::Anticipated(msg, status, _)) => {
-            eprintln!("deja: {}", msg);
-            std::process::exit(status);
+        Err(e) => {
+            println!("deja: {:?}", e);
+            std::process::exit(1);
         }
-        Err(crate::error::Error::Unexpected(e)) => Err(e),
     }
 }

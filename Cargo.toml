@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 anstyle = "1.0.6"
+anyhow = "1.0"
 clap = { version = "4.4.11", features = ["cargo", "string", "env", "color"] }
 clap_complete = "4.4.9"
 dirs = "5.0.1"
