@@ -180,16 +180,19 @@ fn collect_matches(
         .unwrap_or_default()
         .map(|s| s.into())
         .collect::<Vec<String>>();
-    let mut watch_paths = matches
+    let watch_path_bufs = matches
         .get_many::<PathBuf>("watch-path")
         .unwrap_or_default()
         .map(|s| s.into())
         .collect::<Vec<PathBuf>>();
 
-    watch_paths = watch_paths
+    let watch_paths = watch_path_bufs
         .iter()
-        .map(|path| std::fs::canonicalize(path).unwrap())
-        .collect::<Vec<PathBuf>>();
+        .map(|path| {
+            std::fs::canonicalize(path)
+                .map_err(|_| anyhow!("watch path '{}' not found", path.display()))
+        })
+        .collect::<Result<Vec<PathBuf>, anyhow::Error>>()?;
 
     let watch_scope = matches
         .get_many::<String>("watch-scope")
@@ -300,7 +303,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             std::process::exit(status);
         }
         Err(e) => {
-            println!("deja: {:?}", e);
+            eprintln!("deja: {:?}", e);
             std::process::exit(1);
         }
     }

@@ -182,6 +182,12 @@ setup() {
   assert_equal "$stderr" "deja: invalid duration '1xyz', use values like 15s, 30m, 3h, 4d etc"
 }
 
+@test "run --cache-for (error: watch-path not found)" {
+  deja run --watch-path missing -- uuidgen
+  assert_handled_failure "fails when --watch-path is missing"
+  assert_equal "$stderr" "deja: watch path 'missing' not found"
+}
+
 @test "read" {
   deja read -- uuidgen
   assert_handled_failure "fails when no result cached"

@@ -235,7 +235,6 @@ impl Command {
             .stderr(Stdio::piped())
             .spawn()
             .map_err(|e| {
-                let status = e.raw_os_error().unwrap_or(1);
                 let message = match e.kind() {
                     std::io::ErrorKind::NotFound => {
                         format!("command not found: {}", self.scope.cmd)
