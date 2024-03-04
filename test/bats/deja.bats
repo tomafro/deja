@@ -164,10 +164,22 @@ setup() {
   assert_equal "$stderr" "deja: permission denied running command: ./README.md"
 }
 
-@test "run (error: cache location inaccessible)" {
+@test "run (error: unable to write to cache)" {
   deja run --cache /missing/folder -- uuidgen
   assert_handled_failure "fails when unknown command"
   assert_equal "$stderr" "deja: unable to write to cache /missing/folder"
+}
+
+@test "run (error: unable to read from cache)" {
+  deja run -- uuidgen
+
+  echo $DEJA_CACHE > .deja
+  chmod -R 300 $DEJA_CACHE/*
+
+  deja run -- uuidgen
+
+  assert_handled_failure "fails when unable to read cache entry"
+  assert_regex "$stderr" "deja: unable to read cache entry $DEJA_CACHE/.*"
 }
 
 @test "run --look-back (error: invalid duration)" {

@@ -22,7 +22,7 @@ pub fn run(
     look_back: Option<Duration>,
     cache_for: Option<Duration>,
 ) -> anyhow::Result<i32> {
-    if let CacheResult::Fresh(result) = cache.result(&cmd.scope.hash, look_back, None) {
+    if let CacheResult::Fresh(result) = cache.result(&cmd.scope.hash, look_back, None)? {
         Ok(result.replay())
     } else {
         record(cmd, cache, cache_for)
@@ -34,7 +34,7 @@ pub fn read(
     cache: &impl Cache,
     look_back: Option<Duration>,
 ) -> anyhow::Result<i32> {
-    if let CacheResult::Fresh(result) = cache.result(&cmd.scope.hash, look_back, None) {
+    if let CacheResult::Fresh(result) = cache.result(&cmd.scope.hash, look_back, None)? {
         Ok(result.replay())
     } else {
         Ok(1)
@@ -57,7 +57,7 @@ pub fn explain(
 ) -> anyhow::Result<i32> {
     println!("{}", cmd.scope.explanation().explain());
 
-    match cache.result(&cmd.scope.hash, look_back, None) {
+    match cache.result(&cmd.scope.hash, look_back, None)? {
         CacheResult::Fresh(_) => {
             println!("Available in cache");
         }
@@ -86,7 +86,7 @@ pub fn test(
     cache: &impl Cache,
     look_back: Option<Duration>,
 ) -> anyhow::Result<i32> {
-    if let CacheResult::Fresh(result) = cache.result(&cmd.scope.hash, look_back, None) {
+    if let CacheResult::Fresh(result) = cache.result(&cmd.scope.hash, look_back, None)? {
         println!("{:?}", result);
         Ok(0)
     } else {
