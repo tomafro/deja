@@ -252,3 +252,16 @@ setup() {
   deja explain -- uuidgen
   assert_success
 }
+
+@test "hash" {
+  deja hash -- uuidgen
+  assert_success
+
+  first_output=$output
+
+  deja hash -- uuidgen
+  assert_equal $first_output $output "returns previous hash"
+
+  deja hash --watch-path src -- uuidgen
+  assert_not_equal $first_output $output "returns different hash with different options"
+}

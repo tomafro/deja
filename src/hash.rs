@@ -63,14 +63,20 @@ impl From<&std::option::Option<OsString>> for Hash {
 }
 
 impl TryFrom<&PathBuf> for Hash {
-    type Error = std::io::Error;
+    type Error = anyhow::Error;
 
-    fn try_from(path: &PathBuf) -> Result<Self, Self::Error> {
+    fn try_from(path: &PathBuf) -> anyhow::Result<Self> {
         Ok(Hash {
             hash: MerkleTree::builder(path.to_str().unwrap())
                 .hash_names(true)
                 .build()
-                .unwrap()
+                .map_err(|e| {
+                    println!("A {:?}", e);
+                    if let Some(e) = e.source() {
+                        println!("Error: {:?}", e);
+                    }
+                    e
+                })?
                 .root
                 .item
                 .hash,
@@ -109,13 +115,13 @@ impl From<&Vec<Hash>> for Hash {
 }
 
 impl TryFrom<&Vec<PathBuf>> for Hash {
-    type Error = std::io::Error;
+    type Error = anyhow::Error;
 
-    fn try_from(paths: &Vec<PathBuf>) -> Result<Self, Self::Error> {
+    fn try_from(paths: &Vec<PathBuf>) -> anyhow::Result<Self> {
         let hashes = paths
             .iter()
             .map(|p| Hash::try_from(p))
-            .collect::<Result<Vec<Hash>, Self::Error>>();
+            .collect::<Result<Vec<Hash>, anyhow::Error>>();
 
         Ok(Hash::from(&hashes?))
     }

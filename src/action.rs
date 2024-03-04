@@ -101,3 +101,8 @@ pub fn remove(cmd: &mut Command, cache: &impl Cache) -> anyhow::Result<i32> {
         Ok(1)
     }
 }
+
+pub fn hash(cmd: &mut Command, _cache: &impl Cache) -> anyhow::Result<i32> {
+    println!("{}", cmd.scope.hash);
+    Ok(0)
+}

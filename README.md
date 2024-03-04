@@ -46,27 +46,27 @@ A cached result when available will (by default) be returned forever.
 
 `--watch-path [path]` returns the cached result as long as the content of the given path remains the same. It uses a content hash to determine if the path has changed. This option can be provided multiple times to watch multiple different paths.
 
-* `--watch-path Gemfile.lock` - Reuse the result as long as the Gemfile doesn't change
-* `--watch-path src` - Reuse the result while the content of the src folder doesn't change
+- `--watch-path Gemfile.lock` - Reuse the result as long as the Gemfile doesn't change
+- `--watch-path src` - Reuse the result while the content of the src folder doesn't change
 
 `--watch-scope [scope]` returns the cached result while the given scope remains the same. This accepts any string, and combined with shell substitution can be extremely powerful:
 
-* `--watch-scope "$(date +%Y-%m-%d)"` - Reuse the result throughout the day
-* `--watch-scope "$(git rev-parse HEAD)"` - Reuse the result for the current git commit
+- `--watch-scope "$(date +%Y-%m-%d)"` - Reuse the result throughout the day
+- `--watch-scope "$(git rev-parse HEAD)"` - Reuse the result for the current git commit
 
 As with `--watch-path`, `--watch-scope` can be provided multiple times to watch multiple scopes.
 
 `--watch-env` returns the cached result as long as the given environment variables remain the same. This option can be provided multiple times to watch multiple different environment variables.
 
-`--exclude-pwd` excludes the working directory from the cache key. Normally `deja` includes the working directory in the cache key, so the cache is used only when called from the same directory. With this flag set, cached results can be returned whatever directory the command is called from, but *only* if `--exclude-pwd` was originally used. A result generated without `--exclude-pwd` will never be returned from a different directory.
+`--exclude-pwd` excludes the working directory from the cache key. Normally `deja` includes the working directory in the cache key, so the cache is used only when called from the same directory. With this flag set, cached results can be returned whatever directory the command is called from, but _only_ if `--exclude-pwd` was originally used. A result generated without `--exclude-pwd` will never be returned from a different directory.
 
-`--exclude-user` excludes the current user from the cache key. Normally `deja` includes the current user in the cache key; cached results are only returned if called by the same user. With this flag set, cached results can be shared by multiple users, but *only* if `--exclude-user` was originally used. A result generated without `--exclude-user` will *never* be returned to a different user.
+`--exclude-user` excludes the current user from the cache key. Normally `deja` includes the current user in the cache key; cached results are only returned if called by the same user. With this flag set, cached results can be shared by multiple users, but _only_ if `--exclude-user` was originally used. A result generated without `--exclude-user` will _never_ be returned to a different user.
 
 `--cache-for [duration]` limits how long a cached result is valid. It accepts durations in the form `30s`, `5m`, `1h`, `30d`, etc. Any result older than the duration will be discarded.
 
 `--look-back [duration]` limits how far back in time to look for a cached result. It accepts durations in the form `30s`, `5m`, `1h`, `30d`, etc.
 
-* `--look-back 30s` will return any result generated in the last 30 seconds.
+- `--look-back 30s` will return any result generated in the last 30 seconds.
 
 `test` tests whether a cache result exists
 
@@ -76,7 +76,9 @@ As with `--watch-path`, `--watch-scope` can be provided multiple times to watch 
 
 `remove` removes a cached result
 
-`explain` returns information
+`explain` returns information about the given options including the hash components and the cache result (if any)
+
+`hash` returns just the hash used to cache results
 
 ## Tips and tricks
 
@@ -86,10 +88,6 @@ As with `--watch-path`, `--watch-scope` can be provided multiple times to watch 
 export DEJA_WATCH_SCOPE=$(uuidgen)
 deja run -- http http://slow.com/slow.json | jq '.[] | .date'
 ```
-
-# Not implemented yet
-
-`hash` returns the hash for a given set of options. It will never touch the cache, nor execute the command.
 
 ## Motivation
 

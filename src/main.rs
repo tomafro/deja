@@ -166,6 +166,7 @@ fn cli() -> anyhow::Result<clap::Command> {
             subcommand("remove", "Remove command from cache"),
             subcommand("test", "Test if command is cached"),
             subcommand("explain", "Explain cache key for command"),
+            subcommand("hash", "Print hash generated for command and options"),
         ]))
 }
 
@@ -292,6 +293,10 @@ fn run() -> anyhow::Result<i32> {
         Some(("explain", matches)) => {
             let (mut command, cache, look_back, _cache_for) = collect_matches(matches)?;
             action::explain(&mut command, &cache, look_back)
+        }
+        Some(("hash", matches)) => {
+            let (mut command, cache, _look_back, _cache_for) = collect_matches(matches)?;
+            action::hash(&mut command, &cache)
         }
         _ => unreachable!("unknown subcommand not caught by clap"),
     }
