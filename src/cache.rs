@@ -17,7 +17,7 @@ pub enum CacheResult {
 pub trait Cache {
     fn read(&self, hash: &String) -> anyhow::Result<Option<CommandResult>>;
     fn write(&self, hash: &String, result: &CommandResult) -> anyhow::Result<()>;
-    fn remove(&self, hash: &String) -> bool;
+    fn remove(&self, hash: &String) -> anyhow::Result<bool>;
     fn result(
         &self,
         hash: &String,
@@ -76,7 +76,7 @@ impl Cache for DiskCache {
             let file =
                 std::fs::File::open(&path).map_err(|_| unable_to_read_cache_entry_error(&path))?;
             let reader = BufReader::new(file);
-            let result: CommandResult = ron::de::from_reader(reader).unwrap();
+            let result: CommandResult = ron::de::from_reader(reader)?;
             Ok(Some(result))
         } else {
             Ok(None)
@@ -92,18 +92,19 @@ impl Cache for DiskCache {
         std::fs::create_dir_all(parent).map_err(|_| unable_to_write_to_cache_error(&self.root))?;
         let file =
             std::fs::File::create(&path).map_err(|_| unable_to_write_to_cache_error(&self.root))?;
-        ron::ser::to_writer(file, result).unwrap();
+        ron::ser::to_writer(file, result)
+            .map_err(|_| unable_to_write_to_cache_error(&self.root))?;
         Ok(())
     }
 
-    fn remove(&self, hash: &String) -> bool {
+    fn remove(&self, hash: &String) -> anyhow::Result<bool> {
         let path = self.path(hash);
         debug(format!("cache remove: {}, {}", hash, path.display()));
         if path.exists() {
-            std::fs::remove_file(path).unwrap();
-            true
+            std::fs::remove_file(&path).map_err(|_| unable_to_write_to_cache_error(&path))?;
+            Ok(true)
         } else {
-            false
+            Ok(false)
         }
     }
 }

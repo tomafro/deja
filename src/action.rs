@@ -64,13 +64,13 @@ pub fn explain(
         CacheResult::Stale(created) => {
             println!(
                 "Stale: entry in cache created {} seconds ago",
-                created.elapsed().unwrap().as_secs()
+                created.elapsed()?.as_secs()
             );
         }
         CacheResult::Expired(expires_at) => {
             println!(
                 "Expired: entry in cache expired {} seconds ago",
-                expires_at.elapsed().unwrap().as_secs()
+                expires_at.elapsed()?.as_secs()
             );
         }
         CacheResult::Missing => {
@@ -95,7 +95,7 @@ pub fn test(
 }
 
 pub fn remove(cmd: &mut Command, cache: &impl Cache) -> anyhow::Result<i32> {
-    if cache.remove(&cmd.scope.hash) {
+    if cache.remove(&cmd.scope.hash)? {
         Ok(0)
     } else {
         Ok(1)

@@ -20,7 +20,7 @@ where
     let mut result = Vec::new();
     let thread = thread::spawn(move || {
         for line in reader.lines() {
-            let text = line.unwrap();
+            let text = line.unwrap_or("unable to hash path".to_string());
             let output = if stdout {
                 println!("{}", text);
                 Output::Out(start.elapsed().as_nanos(), text)
@@ -251,14 +251,21 @@ impl Command {
         let at = SystemTime::now();
         let start = Instant::now();
 
-        let stdout_handle =
-            capture_output(start, BufReader::new(child.stdout.take().unwrap()), true);
-        let stderr_handle =
-            capture_output(start, BufReader::new(child.stderr.take().unwrap()), false);
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| anyhow!("unable to capture stdout"))?;
+        let stdout_handle = capture_output(start, BufReader::new(stdout), true);
+
+        let stderr = child
+            .stderr
+            .take()
+            .ok_or_else(|| anyhow!("unable to capture stderr"))?;
+        let stderr_handle = capture_output(start, BufReader::new(stderr), false);
 
         let status = child
             .wait()
-            .expect("Internal error, failed to wait on child");
+            .map_err(|e| anyhow!("error waiting for command to finish: {}", e))?;
 
         let mut output = stdout_handle.join().unwrap();
         output.append(&mut stderr_handle.join().unwrap());
