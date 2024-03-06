@@ -1,53 +1,60 @@
 # Deja
 
-`deja` is a shell utility that runs a given command, or if it has seen it before, returns a cached result.
+`deja` is a cli utility to cache the output of commands, and re-use the previous output when called again. It's used like this:
 
-The first time `deja run` is called with a command and arguments, it will always run the command and cache the result. When called again with the same command and arguments it chooses whether to run the command again, or return the previously cached output. Different options control how this choice is made, including if a file or directory has changed, an amount of time has passed, or a user provided scope has changed.
+```bash
+$ deja run -- some-slow-command --with --arguments
+The meaning of life is 42
+```
+
+The first time `deja run` is called (with a given command and arguments), it always runs the command and caches the output. If called again, it decides whether to repeat the previous output, or re-run the command. A number of options control how this decision is made, including if a file or directory has changed, time has passed, or a user provided scope has changed.
 
 Here's an example, calling `date` to print the current date, waiting, then calling it again. The second call returns the same result, even though time marches inexorably onward:
 
 ```bash
+# Run the `date` command to output the date and time
 $ deja run -- date
-Wed 22 Jun 2020 11:00:00 BST
+Wed 22 Jun 2025 11:00:00 BST
+
+# Sleep ten seconds, then run `date` again
 $ sleep 10
-# 10 seconds later...
 $ deja run -- date
-Wed 22 Jun 2020 11:00:00 BST
+Wed 22 Jun 2025 11:00:00 BST
 ```
 
-For `date`, a command that returns instantly where you always want the latest result, this is very unhelpful. But for slower commands, or those you only want to run once it can be very useful. Here are some examples:
+For a command like `date` this is pretty much useless or even harmful. But for slower commands, or those you only want to run once it can be much more helpful. Here are some examples:
 
 ```bash
-# Amazon RDS authentication tokens are valid for 15 minutes, so rather than requesting a new token, re-use the old token for the next 15 minutes
+# Re-use a generated RDS token for 15 minutes
 deja run --cache-for 15m -- aws rds generate-db-auth-token…
 
 # Re-use a list of rake tasks until the Rakefile changes (useful for building quick shell completions)
 deja run --watch-path Rakefile -- rake --tasks
 
-# Re-run webpack only when git HEAD changes
+# Run webpack only when git HEAD changes
 deja run --watch-scope "$(git rev-parse HEAD)" -- yarn run webpack
 
-# Re-use cargo audit results for the same build
-deja run --watch-scope "$BUILD_ID" -- cargo audit
+# Re-use build audit results for the same build
+deja run --watch-env BUILD_ID -- cargo audit
 
 # Play around with a slow API, caching results while you experiment
 export DEJA_WATCH_SCOPE=$(uuidgen)
-deja run -- http http://slow.com/slow.json | jq '.[] | .date'
-deja run -- http http://slow.com/slow.json | jq '.[] | .name'
+deja run -- http http://slow.example.com/slow.json | jq '.[] | .date'
+deja run -- http http://slow.example.com/slow.json | jq '.[] | .name'
 ```
 
 ## How deja works
 
-Unless options are provided, `deja run` takes a command, arguments, the current user, and the working directory and generates a hash. If its cache has a match, it replays the result, otherwise it runs the command and caches the new result.
+When deja is called, it generates a hash from the command, arguments, current user, and working directory. If a result matching this hash is found in the cache its output is replayed, otherwise the command is run and the result is cached.
 
 A cached result when available will (by default) be returned forever.
 
 ## Options
 
-`--watch-path [path]` returns the cached result as long as the content of the given path remains the same. It uses a content hash to determine if the path has changed. This option can be provided multiple times to watch multiple different paths.
+`--watch-path [path]` returns the cached result while the content of the path remains the same (detected via a content hash). It can be used multiple times to watch multiple paths.
 
-- `--watch-path Gemfile.lock` - Reuse the result as long as the Gemfile doesn't change
-- `--watch-path src` - Reuse the result while the content of the src folder doesn't change
+- `--watch-path Gemfile.lock` - Reuse the result while `Gemfile.lock` doesn't change
+- `--watch-path src` - Reuse the result while the the contents or `src` folder doesn't change
 
 `--watch-scope [scope]` returns the cached result while the given scope remains the same. This accepts any string, and combined with shell substitution can be extremely powerful:
 
@@ -56,15 +63,15 @@ A cached result when available will (by default) be returned forever.
 
 As with `--watch-path`, `--watch-scope` can be provided multiple times to watch multiple scopes.
 
-`--watch-env` returns the cached result as long as the given environment variables remain the same. This option can be provided multiple times to watch multiple different environment variables.
+`--watch-env` returns the cached result while given environment variables remain unchanged. This option can be provided multiple times to watch multiple different environment variables.
 
-`--exclude-pwd` excludes the working directory from the cache key. Normally `deja` includes the working directory in the cache key, so the cache is used only when called from the same directory. With this flag set, cached results can be returned whatever directory the command is called from, but _only_ if `--exclude-pwd` was originally used. A result generated without `--exclude-pwd` will never be returned from a different directory.
+`--exclude-pwd` removes the working directory from the cache key. Without this flag `deja` includes the working directory; cached results are only returned when called from the same directory. With this flag, cached results can be returned whatever directory the command is called from, but _only_ if `--exclude-pwd` was originally used. A result generated without `--exclude-pwd` will never be returned from a different directory.
 
-`--exclude-user` excludes the current user from the cache key. Normally `deja` includes the current user in the cache key; cached results are only returned if called by the same user. With this flag set, cached results can be shared by multiple users, but _only_ if `--exclude-user` was originally used. A result generated without `--exclude-user` will _never_ be returned to a different user.
+`--exclude-user` removes the current user from the cache key. Normally `deja` includes the current user; cached results are only returned if called by the same user. With this flag, cached results can be shared by multiple users, but _only_ if `--exclude-user` was originally used. A result generated without `--exclude-user` will _never_ be returned to a different user.
 
-`--cache-for [duration]` limits how long a cached result is valid. It accepts durations in the form `30s`, `5m`, `1h`, `30d`, etc. Any result older than the duration will be discarded.
+`--cache-for [duration]` limits for how long a cached result is valid. It accepts durations in the form `30s`, `5m`, `1h`, `30d`, etc. If a result is stored with `--cache-for`, it will never be returned after the duration has passed.
 
-`--look-back [duration]` limits how far back in time to look for a cached result. It accepts durations in the form `30s`, `5m`, `1h`, `30d`, etc.
+`--look-back [duration]` limits how far back in time to look for a cached result. It accepts durations in the form `30s`, `5m`, `1h`, `30d`, etc. When `--look-back` is used, `deja` will only re-use a result if it was generated within the given duration. If no result is found within the look-back period, the command will be run and the result cached.
 
 - `--look-back 30s` will return any result generated in the last 30 seconds.
 
@@ -72,17 +79,21 @@ As with `--watch-path`, `--watch-scope` can be provided multiple times to watch 
 
 - `deja read --cache-miss-exit-code 200 -- grep -q needle haystack` will return 200 if the cache is missed, and the exit status of `grep` if the cache is hit.
 
-`test` tests whether a cache result exists
+## Subcommands
 
-`read` returns a cached result or exits
+`run` is the main subcommand, used to run a command and cache the result.
 
-`force` forces an update of the cache
+`test` takes the same options as `run`, but never runs the command. Instead it exits with a status code of 0 if a cached result is found, or 1 if not.
 
-`remove` removes a cached result
+`read` never runs the given command, but will replay a cached result if one exists. If no result is found, `deja` will exit with a status of 1 (though this can be changed with `--cache-miss-exit-code`).
+
+`force` always runs the given command and caches the result.
+
+`remove` removes any cached result that would have been returned.
 
 `explain` returns information about the given options including the hash components and the cache result (if any)
 
-`hash` returns just the hash used to cache results
+`hash` returns the hash used to cache results
 
 ## Tips and tricks
 
