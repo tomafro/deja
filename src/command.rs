@@ -18,7 +18,7 @@ where
     R: BufRead + Send + 'static,
 {
     let mut result = Vec::new();
-    let thread = thread::spawn(move || {
+    thread::spawn(move || {
         for line in reader.lines() {
             let text = line.unwrap_or("unable to hash path".to_string());
             let output = if stdout {
@@ -31,8 +31,7 @@ where
             result.push(output);
         }
         result
-    });
-    thread
+    })
 }
 
 #[derive(Debug, Deserialize, Serialize, Default, Clone)]
@@ -156,7 +155,7 @@ impl<'a> ScopeExplanation<'a> {
         for arg in &self.scope.args {
             result.push_str(format!(" {}", arg).as_str());
         }
-        result.push_str("\n");
+        result.push('\n');
     }
 
     fn explain_user(&self, result: &mut String) {
@@ -177,7 +176,7 @@ impl<'a> ScopeExplanation<'a> {
             for scope in &self.scope.watch_scope {
                 result.push_str(format!(" \"{}\"", scope).as_str());
             }
-            result.push_str("\n");
+            result.push('\n');
         }
     }
 
@@ -269,7 +268,7 @@ impl Command {
 
         let mut output = stdout_handle.join().unwrap();
         output.append(&mut stderr_handle.join().unwrap());
-        output.sort_by(|a, b| a.time().cmp(&b.time()));
+        output.sort_by_key(|a| a.time());
 
         let status = status.code().unwrap_or(1);
 

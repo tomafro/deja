@@ -4,23 +4,23 @@ use crate::command::CommandResult;
 use crate::debug;
 use std::io::BufReader;
 use std::ops::Add;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
 pub enum CacheResult {
-    Fresh(CommandResult),
+    Fresh(Box<CommandResult>),
     Stale(SystemTime),
     Expired(SystemTime),
     Missing,
 }
 
 pub trait Cache {
-    fn read(&self, hash: &String) -> anyhow::Result<Option<CommandResult>>;
-    fn write(&self, hash: &String, result: &CommandResult) -> anyhow::Result<()>;
-    fn remove(&self, hash: &String) -> anyhow::Result<bool>;
+    fn read(&self, hash: &str) -> anyhow::Result<Option<CommandResult>>;
+    fn write(&self, hash: &str, result: &CommandResult) -> anyhow::Result<()>;
+    fn remove(&self, hash: &str) -> anyhow::Result<bool>;
     fn result(
         &self,
-        hash: &String,
+        hash: &str,
         look_back: Option<Duration>,
         now: Option<SystemTime>,
     ) -> anyhow::Result<CacheResult> {
@@ -39,7 +39,7 @@ pub trait Cache {
                 }
             }
 
-            Ok(CacheResult::Fresh(result))
+            Ok(CacheResult::Fresh(Box::new(result)))
         } else {
             Ok(CacheResult::Missing)
         }
@@ -55,21 +55,21 @@ impl DiskCache {
         DiskCache { root }
     }
 
-    fn path(&self, hash: &String) -> std::path::PathBuf {
+    fn path(&self, hash: &str) -> std::path::PathBuf {
         self.root.join(hash)
     }
 }
 
-pub fn unable_to_write_to_cache_error(path: &PathBuf) -> Error {
+pub fn unable_to_write_to_cache_error(path: &Path) -> Error {
     anyhow!("unable to write to cache {}", path.display())
 }
 
-pub fn unable_to_read_cache_entry_error(path: &PathBuf) -> Error {
+pub fn unable_to_read_cache_entry_error(path: &Path) -> Error {
     anyhow!("unable to read cache entry {}", path.display())
 }
 
 impl Cache for DiskCache {
-    fn read(&self, hash: &String) -> anyhow::Result<Option<CommandResult>> {
+    fn read(&self, hash: &str) -> anyhow::Result<Option<CommandResult>> {
         let path = self.path(hash);
         debug(format!("looking for path: {}", path.display()));
         if path.exists() {
@@ -83,7 +83,7 @@ impl Cache for DiskCache {
         }
     }
 
-    fn write(&self, hash: &String, result: &CommandResult) -> anyhow::Result<()> {
+    fn write(&self, hash: &str, result: &CommandResult) -> anyhow::Result<()> {
         let path = self.path(hash);
         debug(format!("cache write: {}, {}", hash, path.display()));
         let parent = path
@@ -97,7 +97,7 @@ impl Cache for DiskCache {
         Ok(())
     }
 
-    fn remove(&self, hash: &String) -> anyhow::Result<bool> {
+    fn remove(&self, hash: &str) -> anyhow::Result<bool> {
         let path = self.path(hash);
         debug(format!("cache remove: {}, {}", hash, path.display()));
         if path.exists() {

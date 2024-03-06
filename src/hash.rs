@@ -120,7 +120,7 @@ impl TryFrom<&Vec<PathBuf>> for Hash {
     fn try_from(paths: &Vec<PathBuf>) -> anyhow::Result<Self> {
         let hashes = paths
             .iter()
-            .map(|p| Hash::try_from(p))
+            .map(Hash::try_from)
             .collect::<Result<Vec<Hash>, anyhow::Error>>();
 
         Ok(Hash::from(&hashes?))
@@ -129,7 +129,7 @@ impl TryFrom<&Vec<PathBuf>> for Hash {
 
 impl From<&Vec<String>> for Hash {
     fn from(strings: &Vec<String>) -> Self {
-        let hashes = strings.iter().map(|p| Hash::from(p)).collect::<Vec<Hash>>();
+        let hashes = strings.iter().map(Hash::from).collect::<Vec<Hash>>();
         Hash::from(&hashes)
     }
 }
