@@ -33,11 +33,12 @@ pub fn read(
     cmd: &mut Command,
     cache: &impl Cache,
     look_back: Option<Duration>,
+    cache_miss_exit_code: i32,
 ) -> anyhow::Result<i32> {
     if let CacheResult::Fresh(result) = cache.result(&cmd.scope.hash, look_back, None)? {
         Ok(result.replay())
     } else {
-        Ok(1)
+        Ok(cache_miss_exit_code)
     }
 }
 

@@ -68,6 +68,10 @@ As with `--watch-path`, `--watch-scope` can be provided multiple times to watch 
 
 - `--look-back 30s` will return any result generated in the last 30 seconds.
 
+`--cache-miss-exit-code` (for `read` subcommand only) returns the given exit status on cache miss.
+
+- `deja read --cache-miss-exit-code 200 -- grep -q needle haystack` will return 200 if the cache is missed, and the exit status of `grep` if the cache is hit.
+
 `test` tests whether a cache result exists
 
 `read` returns a cached result or exits

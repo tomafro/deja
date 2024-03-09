@@ -23,7 +23,7 @@ pub fn debug(string: String) {
     };
 }
 
-fn subcommand(name: &str, about: &str) -> clap::Command {
+fn subcommand(name: &str, about: &str, cache_miss_exit_code: bool) -> clap::Command {
     let mut cache = Arg::new("cache")
         .long("cache")
         .value_name("path")
@@ -94,7 +94,7 @@ fn subcommand(name: &str, about: &str) -> clap::Command {
         .help("Arguments to pass to command")
         .action(clap::ArgAction::Append);
 
-    let cache_args = vec![
+    let mut cache_args = vec![
         watch_path,
         watch_scope,
         watch_env,
@@ -103,9 +103,21 @@ fn subcommand(name: &str, about: &str) -> clap::Command {
         look_back,
         cache_for,
         cache,
-        command,
-        arguments,
     ];
+
+    if cache_miss_exit_code {
+        cache_args.push(
+            Arg::new("cache-miss-exit-code")
+                .long("cache-miss-exit-code")
+                .value_name("code")
+                .value_parser(clap::value_parser!(i32).range(1..256))
+                .help("Exit code to use when cache miss occurs")
+                .default_value("1"),
+        );
+    }
+
+    cache_args.push(command);
+    cache_args.push(arguments);
 
     clap::Command::new(name.to_string())
         .about(about.to_string())
@@ -160,13 +172,21 @@ fn cli() -> anyhow::Result<clap::Command> {
                 .hide(false),
         )
         .subcommands(vec![
-            subcommand("run", "Return cached result or run and cache command"),
-            subcommand("read", "Return cached result or exit"),
-            subcommand("force", "Run and cache command"),
-            subcommand("remove", "Remove command from cache"),
-            subcommand("test", "Test if command is cached"),
-            subcommand("explain", "Explain cache key for command"),
-            subcommand("hash", "Print hash generated for command and options"),
+            subcommand(
+                "run",
+                "Return cached result or run and cache command",
+                false,
+            ),
+            subcommand("read", "Return cached result or exit", true),
+            subcommand("force", "Run and cache command", false),
+            subcommand("remove", "Remove command from cache", false),
+            subcommand("test", "Test if command is cached", true),
+            subcommand("explain", "Explain cache key for command", false),
+            subcommand(
+                "hash",
+                "Print hash generated for command and options",
+                false,
+            ),
         ]))
 }
 
@@ -276,7 +296,8 @@ fn run() -> anyhow::Result<i32> {
         }
         Some(("read", matches)) => {
             let (mut command, cache, look_back, _cache_for) = collect_matches(matches)?;
-            action::read(&mut command, &cache, look_back)
+            let cache_miss_exit_code = matches.get_one::<i32>("cache-miss-exit-code").unwrap_or(&1);
+            action::read(&mut command, &cache, look_back, *cache_miss_exit_code)
         }
         Some(("force", matches)) => {
             let (mut command, cache, _look_back, cache_for) = collect_matches(matches)?;

@@ -211,6 +211,12 @@ setup() {
   assert_success_with_uuid_matching $first_output "returns cached result"
 }
 
+@test "read --cache-miss-exit-code" {
+  deja read --cache-miss-exit-code 123 -- uuidgen
+  assert_handled_failure "fails when no result cached"
+  assert_equal "$status" "123" "returns exit code specified when no result cached"
+}
+
 @test "force" {
   deja run -- uuidgen
 
