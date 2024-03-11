@@ -8,6 +8,7 @@ deja_setup() {
   bats_require_minimum_version 1.5.0
 
   deja_bin="$(which deja)"
+  test_command="$PWD/test/test-command"
 
   mkdir -p tmp/bats
   chmod -R 700 tmp/bats
