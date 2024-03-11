@@ -11,8 +11,10 @@ fn record(
     cache_for: Option<Duration>,
 ) -> anyhow::Result<i32> {
     let mut result = cmd.run()?;
-    result.expires = cache_for.map(|d| SystemTime::now().add(d));
-    cache.write(&cmd.scope.hash, &result)?;
+    if result.status == 0 {
+      result.expires = cache_for.map(|d| SystemTime::now().add(d));
+      cache.write(&cmd.scope.hash, &result)?;
+    }
     Ok(result.status)
 }
 

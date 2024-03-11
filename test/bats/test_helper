@@ -1,5 +1,6 @@
 deja() {
   run --separate-stderr -- $deja_bin "$@"
+  export MOCK_COMMAND_STATUS=0
 }
 
 deja_setup() {
@@ -16,29 +17,34 @@ deja_setup() {
   mkdir -p "$WORKSPACE"
   export DEJA_CACHE=$PWD/tmp/bats/cache
   export PATH=$PWD/test/bin:$PATH
+  export MOCK_COMMAND_STATUS=0
 }
 
-assert_uuid() {
+set_next_mock_command_return_status() {
+  export MOCK_COMMAND_STATUS=$1
+}
+
+assert_mock_command_output() {
   assert_regex "$1" "[A-z0-9]+-[A-z0-9]+-[A-z0-9]+-[A-z0-9]+-[A-z0-9]+"
 }
 
-assert_success_with_uuid() {
+assert_success_with_mock_command_output() {
   assert_success
-  assert_uuid "$output"
+  assert_mock_command_output "$output"
 }
 
-assert_success_with_uuid_matching() {
+assert_success_with_mock_command_output_matching() {
   assert_success
   assert_equal "$output" "$1"
-  assert_uuid "$1"
-  assert_uuid "$output"
+  assert_mock_command_output "$1"
+  assert_mock_command_output "$output"
 }
 
-assert_success_with_uuid_not_matching() {
+assert_success_with_mock_command_output_not_matching() {
   assert_success
   assert_not_equal "$output" "$1"
-  assert_uuid "$1"
-  assert_uuid "$output"
+  assert_mock_command_output "$1"
+  assert_mock_command_output "$output"
 }
 
 assert_handled_failure() {
