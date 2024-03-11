@@ -8,7 +8,6 @@ deja_setup() {
   bats_require_minimum_version 1.5.0
 
   deja_bin="$(which deja)"
-  test_command="$PWD/test/test-command"
 
   mkdir -p tmp/bats
   chmod -R 700 tmp/bats
@@ -16,6 +15,7 @@ deja_setup() {
   export WORKSPACE=$PWD/tmp/bats/test
   mkdir -p "$WORKSPACE"
   export DEJA_CACHE=$PWD/tmp/bats/cache
+  export PATH=$PWD/test/bin:$PATH
 }
 
 assert_uuid() {
