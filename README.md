@@ -7,7 +7,7 @@ $ deja run -- some-slow-command --with --arguments
 The meaning of life is 42
 ```
 
-The first time `deja run` is called (with a given command and arguments), it always runs the command and caches the output. If called again, it decides whether to repeat the previous output, or re-run the command. A number of options control how this decision is made, including if a file or directory has changed, time has passed, or a user provided scope has changed.
+The first time `deja run` is called (with a given command and arguments), it runs the command and caches the output. If called again, it decides whether to repeat the previous output, or re-run the command. Different options control how this decision is made, including if a file or directory has changed, time has passed, or a user provided scope has changed.
 
 Here's an example, calling `date` to print the current date, waiting, then calling it again. The second call returns the same result, even though time marches inexorably onward:
 
@@ -22,13 +22,13 @@ $ deja run -- date
 Wed 22 Jun 2025 11:00:00 BST
 ```
 
-For a command like `date` this is pretty much useless or even harmful. But for slower commands, or those you only want to run once it can be much more helpful. Here are some examples:
+For a command like `date` this is pretty much useless. But for slower commands, or those you only want to run once it can be much more helpful. Here are some examples:
 
 ```bash
 # Re-use a generated RDS token for 15 minutes
 deja run --cache-for 15m -- aws rds generate-db-auth-token…
 
-# Re-use a list of rake tasks until the Rakefile changes (useful for building quick shell completions)
+# Re-use a list of rake tasks until the Rakefile changes (for quick shell completions)
 deja run --watch-path Rakefile -- rake --tasks
 
 # Run webpack only when git HEAD changes
@@ -37,17 +37,16 @@ deja run --watch-scope "$(git rev-parse HEAD)" -- yarn run webpack
 # Re-use build audit results for the same build
 deja run --watch-env BUILD_ID -- cargo audit
 
-# Play around with a slow API, caching results while you experiment
+# Play with a slow API, caching results while you experiment
 export DEJA_WATCH_SCOPE=$(uuidgen)
 deja run -- http http://slow.example.com/slow.json | jq '.[] | .date'
 deja run -- http http://slow.example.com/slow.json | jq '.[] | .name'
+unset DEJA_WATCH_SCOPE
 ```
 
 ## How deja works
 
-When deja is called, it generates a hash from the command, arguments, current user, and working directory. If a result matching this hash is found in the cache its output is replayed, otherwise the command is run and the result is cached.
-
-A cached result when available will (by default) be returned forever.
+When deja is called with no options, it generates a hash from the command, arguments, current user, and working directory. If a result matching this hash is found in the cache its output is replayed, otherwise the command is run and if it is successful, the result is cached alongside some metadata. A matching result will be returned forever.
 
 ## Options
 
