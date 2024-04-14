@@ -15,4 +15,4 @@ humantime = "2.1.0"
 merkle_hash = "3.5"
 ron = { version = "0.8.1", features = ["integer128"] }
 serde = { version = "1", features = ["derive"] }
-whoami = "1.4.1"
+whoami = "1.5.0"
