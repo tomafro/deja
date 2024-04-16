@@ -9,9 +9,10 @@ fn record(
     cmd: &mut Command,
     cache: &impl Cache,
     cache_for: Option<Duration>,
+    record_exit_codes: [bool;256],
 ) -> anyhow::Result<i32> {
     let mut result = cmd.run()?;
-    if result.status == 0 {
+    if record_exit_codes[result.status as usize] {
       result.expires = cache_for.map(|d| SystemTime::now().add(d));
       cache.write(&cmd.scope.hash, &result)?;
     }
@@ -23,11 +24,12 @@ pub fn run(
     cache: &impl Cache,
     look_back: Option<Duration>,
     cache_for: Option<Duration>,
+    record_exit_codes: [bool;256]
 ) -> anyhow::Result<i32> {
     if let CacheResult::Fresh(result) = cache.result(&cmd.scope.hash, look_back, None)? {
         Ok(result.replay())
     } else {
-        record(cmd, cache, cache_for)
+        record(cmd, cache, cache_for, record_exit_codes)
     }
 }
 
@@ -48,8 +50,9 @@ pub fn force(
     cmd: &mut Command,
     cache: &impl Cache,
     cache_for: Option<Duration>,
+    record_exit_codes: [bool;256]
 ) -> anyhow::Result<i32> {
-    record(cmd, cache, cache_for)?;
+    record(cmd, cache, cache_for, record_exit_codes)?;
     Ok(0)
 }
 
