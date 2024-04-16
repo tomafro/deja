@@ -70,6 +70,11 @@ As with `--watch-path`, `--watch-scope` can be provided multiple times to watch 
 
 `--cache-for [duration]` limits for how long a cached result is valid. It accepts durations in the form `30s`, `5m`, `1h`, `30d`, etc. If a result is stored with `--cache-for`, it will never be returned after the duration has passed.
 
+`--record-exit-codes [codes]` expands the list of exit codes `deja` will cache. It accepts a comma separated list of either individual codes like `0,1`, inclusive ranges like `100-200`, or open-ended ranges like `0+`. By default, `deja` only caches the result of a command if the exit code is `0`. In some cases you may want other exit codes to be cached, for example if grepping a huge file for a string that may or may not be present.
+
+- `--record-exit-codes 0,1` will cache the result if the exit code is `0` or `1`.
+- `--record-exit-codes 0,10-12,100+` will cache the result if the exit code is `0`, `10`, `11`, or `12`, or `100` or greater.
+
 `--look-back [duration]` limits how far back in time to look for a cached result. It accepts durations in the form `30s`, `5m`, `1h`, `30d`, etc. When `--look-back` is used, `deja` will only re-use a result if it was generated within the given duration. If no result is found within the look-back period, the command will be run and the result cached.
 
 - `--look-back 30s` will return any result generated in the last 30 seconds.

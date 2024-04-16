@@ -42,6 +42,19 @@ setup() {
   assert_success_with_mock_command_output_not_matching $first_output "returns new result"
 }
 
+@test "run --record-exit-codes 0,1" {
+  set_next_mock_command_return_status 1
+  deja run --record-exit-codes 0,1 -- mock-command
+  assert_failure 1
+  assert_mock_command_output $output
+
+  first_output=$output
+
+  deja run --record-exit-codes 0,1 -- mock-command
+  assert_failure 1
+  assert_equal "$output" "$first_output"
+}
+
 @test "run --watch-path" {
   folder=$(folder_fixture folder)
   other_folder=$(folder_fixture other_folder)
