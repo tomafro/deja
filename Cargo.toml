@@ -1,7 +1,15 @@
 [package]
 name = "deja"
 version = "0.1.0"
+description = "A simple command line utility to cache the output of commands"
+homepage = "https://github.com/tomafro/deja"
+repository = "https://github.com/tomafro/deja"
+documentation = "https://github.com/tomafro/deja"
+authors = ["Tom Ward <tom@popdog.net>"]
+license = "MIT"
+categories = ["command-line-utilities", "caching"]
 edition = "2021"
+exclude = [".github", "/test", "/bin"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
