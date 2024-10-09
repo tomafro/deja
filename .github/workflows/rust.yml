@@ -16,8 +16,6 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    - name: git submodule update
-      run: git submodule update --init --recursive
     - name: cargo install
       run: cargo install --verbose --path .
     - name: cargo test
