@@ -1,2 +1,2 @@
 #!/bin/bash
-./vendor/bats-core/bin/bats $@
+./test/vendor/bats-core/bin/bats $@

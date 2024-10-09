@@ -4,8 +4,8 @@ deja() {
 }
 
 deja_setup() {
-  load '../../vendor/bats-support/load'
-  load '../../vendor/bats-assert/load'
+  load '../vendor/bats-support/load'
+  load '../vendor/bats-assert/load'
   bats_require_minimum_version 1.5.0
 
   deja_bin="$(which deja)"
