@@ -1,6 +1,6 @@
 [package]
 name = "deja"
-version = "0.1.0"
+version = "0.1.1"
 description = "A simple command line utility to cache the output of commands"
 homepage = "https://github.com/tomafro/deja"
 repository = "https://github.com/tomafro/deja"
