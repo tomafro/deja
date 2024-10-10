@@ -232,6 +232,7 @@ fn parse_exit_codes(
   exit_codes
 }
 
+#[allow(clippy::type_complexity)]
 fn collect_matches(
     matches: &clap::ArgMatches,
 ) -> anyhow::Result<(Command, impl Cache, Option<Duration>, Option<Duration>, [bool;256])> {
@@ -295,7 +296,7 @@ fn collect_matches(
     }
 
     let record_exit_codes = if let Some(exit_codes) = matches.get_one::<String>("record-exit-codes") {
-      parse_exit_codes(&exit_codes)
+      parse_exit_codes(exit_codes)
     }
     else {
       parse_exit_codes("0")
