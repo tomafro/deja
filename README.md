@@ -1,13 +1,19 @@
 # Deja
 
-`deja` is a cli utility to cache the output of commands, and re-use the previous output when called again. It's used like this:
+`deja` is a CLI utility to cache the output of commands, re-using previous output on subsequent calls. It's used like this:
 
 ```bash
 $ deja run -- some-slow-command --with --arguments
 The meaning of life is 42
 ```
 
-The first time `deja run` is called (with a given command and arguments), it runs the command and caches the output. If called again, it decides whether to repeat the previous output, or re-run the command. Different options control how this decision is made, including if a file or directory has changed, time has passed, or a user provided scope has changed.
+## Installation
+
+At present, the easiest way to install `deja` is with [`cargo`](https://doc.rust-lang.org/cargo/), using `cargo install deja`.
+
+## Usage
+
+The first time `deja run` is called, the given command is executed and the output both displayed and cached. If called again (with the same arguments), the cached result is displayed. By passing various options, you can control under what conditions to return the cached result, or when to re-run the command. These include checking if a file or folder have changed, a period of time has passed, or a provided scope is different.
 
 Here's an example, calling `date` to print the current date, waiting, then calling it again. The second call returns the same result, even though time marches inexorably onward:
 
@@ -25,7 +31,7 @@ Wed 22 Jun 2025 11:00:00 BST
 For a command like `date` this is pretty much useless. But for slower commands, or those you only want to run once it can be much more helpful. Here are some examples:
 
 ```bash
-# Re-use a generated RDS token for 15 minutes
+# Re-use a generated RDS token for its 15 minute lifespan
 deja run --cache-for 15m -- aws rds generate-db-auth-token…
 
 # Re-use a list of rake tasks until the Rakefile changes (for quick shell completions)
@@ -37,16 +43,18 @@ deja run --watch-scope "$(git rev-parse HEAD)" -- yarn run webpack
 # Re-use build audit results for the same build
 deja run --watch-env BUILD_ID -- cargo audit
 
-# Play with a slow API, caching results while you experiment
+# Play around with a slow API, caching results while you experiment
 export DEJA_WATCH_SCOPE=$(uuidgen)
-deja run -- http http://slow.example.com/slow.json | jq '.[] | .date'
-deja run -- http http://slow.example.com/slow.json | jq '.[] | .name'
+deja run -- http http://example.com/slow.json | jq '.[] | .date'
+deja run -- http http://example.com/slow.json | jq '.[] | .name'
 unset DEJA_WATCH_SCOPE
 ```
 
 ## How deja works
 
-When deja is called with no options, it generates a hash from the command, arguments, current user, and working directory. If a result matching this hash is found in the cache its output is replayed, otherwise the command is run and if it is successful, the result is cached alongside some metadata. A matching result will be returned forever.
+For each command, deja creates a hash from the command, arguments, current user and working directory. If a result for this hash is found in the cache, it is replayed. If not, the command is run and the result stored in the cache. By default, deja only caches the result if the command exits with status `0`. This can be changed with the `--record-exit-codes` option.
+
+Various other options add or remove things from the hash, giving finer control over when to use a cached result. There are also other subcommands to manipulate and query the cache.
 
 ## Options
 
@@ -98,15 +106,6 @@ As with `--watch-path`, `--watch-scope` can be provided multiple times to watch 
 `explain` returns information about the given options including the hash components and the cache result (if any)
 
 `hash` returns the hash used to cache results
-
-## Tips and tricks
-
-### Caching results for a specific shell session
-
-```bash
-export DEJA_WATCH_SCOPE=$(uuidgen)
-deja run -- http http://slow.com/slow.json | jq '.[] | .date'
-```
 
 ## Motivation
 
