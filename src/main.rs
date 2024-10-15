@@ -23,17 +23,26 @@ pub fn debug(string: String) {
     };
 }
 
-fn subcommand(name: &str, about: &str, include_cache_miss_exit_code_param: bool, include_record_exit_codes_param: bool) -> clap::Command {
+fn subcommand(
+    name: &str,
+    about: &str,
+    include_cache_miss_exit_code_param: bool,
+    include_record_exit_codes_param: bool,
+) -> clap::Command {
+    let env = "DEJA_CACHE";
     let mut cache = Arg::new("cache")
         .long("cache")
         .value_name("path")
-        .help("Cache directory")
-        .env("DEJA_CACHE")
-        .hide_env(true)
+        .help("Path used as cache")
+        .env(&env)
         .value_parser(value_parser!(PathBuf));
 
     cache = if let Some(cache_dir) = dirs::cache_dir() {
-        cache.default_value(cache_dir.join("deja").into_os_string())
+        let default_cache = cache_dir.join("deja").into_os_string();
+        let default_cache_string = default_cache.to_string_lossy();
+        cache.default_value(&default_cache)
+          .long_help(format!("Directory to store cache files (default: {default_cache_string}). Can also be set via the {env} variable."))
+          .hide_env(true)
     } else {
         cache
     };
@@ -41,47 +50,56 @@ fn subcommand(name: &str, about: &str, include_cache_miss_exit_code_param: bool,
     let watch_path = Arg::new("watch-path")
         .long("watch-path")
         .value_name("path")
-        .help("Include path contents in cache key (any file or directory)")
+        .help("Include path contents in cache key")
+        .long_help(r#"
+Include path contents in cache key. Watching a path generates a hash of the contents and includes it in the cache key.
+
+This argument can be given multiple times to watch multiple paths."#)
         .value_parser(value_parser!(PathBuf))
         .action(clap::ArgAction::Append);
 
     let watch_scope = Arg::new("watch-scope")
         .long("watch-scope")
         .value_name("scope")
-        .help("Include given scope in cache key (any string)")
+        .help("Include given scope in cache key")
         .env("DEJA_WATCH_SCOPE")
+        .hide_env(true)
         .action(clap::ArgAction::Append);
 
     let watch_env = Arg::new("watch-env")
         .long("watch-env")
         .value_name("env")
-        .help("Include environment variable value in cache key")
+        .help("Include variable value in cache key")
         .action(clap::ArgAction::Append);
 
     let exclude_pwd = Arg::new("exclude-pwd")
         .long("exclude-pwd")
-        .help("Remove current directory from cache key (default: false)")
+        .help("Remove current directory from cache key")
         .env("DEJA_IGNORE_PWD")
+        .hide_env(true)
         .action(clap::ArgAction::SetTrue);
 
     let exclude_user = Arg::new("exclude-user")
         .long("exclude-user")
-        .help("Remove current user from cache key (default: false)")
+        .help("Remove current user from cache key")
         .env("DEJA_IGNORE_USER")
+        .hide_env(true)
         .action(clap::ArgAction::SetTrue);
 
     let look_back = Arg::new("look-back")
         .long("look-back")
         .value_name("duration")
+        .help("How far back in time to look for cached results")
         .env("DEJA_LOOK_BACK")
-        .help("When reading from the cache, how far back in time to look (e.g. 30s, 15m, 1h, 5d)")
+        .hide_env(true)
         .long_help("When reading from the cache, only consider results created in the given time period (e.g. 30s, 15m, 1h, 5d)\n\nThis can be useful to ensure the result is still fresh.");
 
     let cache_for = Arg::new("cache-for")
         .long("cache-for")
         .value_name("duration")
+        .help("How long a cached result should be valid")
         .env("DEJA_CACHE_FOR")
-        .help("When writing to the cache, how long a result should be valid (e.g. 30s, 15m, 1h, 5d)")
+        .hide_env(true)
         .long_help("When writing to the cache, only store results for the given time period (e.g. 30s, 15m, 1h, 5d)\n\nThis can be useful to ensure the result is still fresh.");
 
     let command = Arg::new("command")
@@ -111,8 +129,9 @@ fn subcommand(name: &str, about: &str, include_cache_miss_exit_code_param: bool,
                 .long("cache-miss-exit-code")
                 .value_name("code")
                 .value_parser(clap::value_parser!(i32).range(1..256))
-                .help("Exit code to use when cache miss occurs")
-                .default_value("1"),
+                .help("Exit code when a cache miss occurs (default: 1)")
+                .default_value("1")
+                .hide_default_value(true),
         );
     }
 
@@ -121,7 +140,10 @@ fn subcommand(name: &str, about: &str, include_cache_miss_exit_code_param: bool,
             Arg::new("record-exit-codes")
                 .long("record-exit-codes")
                 .value_name("exit-codes")
-                .help("Exit codes to record in the cache")
+                .env("DEJA_RECORD_EXIT_CODES")
+                .hide_env(true)
+                .help("Exit codes to record in the cache (default: 0)")
+                .hide_default_value(true)
                 .default_value("0"),
         );
     }
@@ -170,6 +192,25 @@ pub fn styles() -> clap::builder::Styles {
 }
 
 fn cli() -> anyhow::Result<clap::Command> {
+    let run = subcommand(
+        "run",
+        "Return cached result or run and cache command",
+        false,
+        true,
+    );
+
+    let read = subcommand("read", "Return cached result or exit", true, false);
+    let force = subcommand("force", "Run and cache command", false, true);
+    let remove = subcommand("remove", "Remove command from cache", false, false);
+    let test = subcommand("test", "Test if command is cached", false, false);
+    let explain = subcommand("explain", "Explain cache key for command", false, false);
+    let hash = subcommand(
+        "hash",
+        "Print hash generated for command and options",
+        false,
+        false,
+    );
+
     Ok(clap::command!()
         .name("deja")
         .arg_required_else_help(true)
@@ -181,62 +222,44 @@ fn cli() -> anyhow::Result<clap::Command> {
                 .global(true)
                 .hide(false),
         )
-        .subcommands(vec![
-            subcommand(
-                "run",
-                "Return cached result or run and cache command",
-                false,
-                true
-            ),
-            subcommand("read", "Return cached result or exit", true, false),
-            subcommand("force", "Run and cache command", false, true),
-            subcommand("remove", "Remove command from cache", false, false),
-            subcommand("test", "Test if command is cached", false, false),
-            subcommand("explain", "Explain cache key for command", false, false),
-            subcommand(
-                "hash",
-                "Print hash generated for command and options",
-                false,
-                false
-            ),
-        ]))
+        .subcommands(vec![run, read, force, remove, test, explain, hash]))
 }
 
-fn parse_exit_codes(
-  param: &str
-) -> [bool; 256] {
-  let parts = param
-    .split(',')
-    .map(|s| s.trim());
+fn parse_exit_codes(param: &str) -> [bool; 256] {
+    let parts = param.split(',').map(|s| s.trim());
 
-  let mut exit_codes = [false; 256];
-  for part in parts {
-    if part.ends_with('+') {
-      let start = part.trim_end_matches('+').parse::<i32>().unwrap();
-      for i in start..=255 {
-        exit_codes[i as usize] = true;
-      }
+    let mut exit_codes = [false; 256];
+    for part in parts {
+        if part.ends_with('+') {
+            let start = part.trim_end_matches('+').parse::<i32>().unwrap();
+            for i in start..=255 {
+                exit_codes[i as usize] = true;
+            }
+        } else if part.contains('-') {
+            let mut parts = part.split('-');
+            let start = parts.next().unwrap().parse::<i32>().unwrap();
+            let end = parts.next().unwrap().parse::<i32>().unwrap();
+            for i in start..=end {
+                exit_codes[i as usize] = true;
+            }
+        } else {
+            let code = part.parse::<i32>().unwrap();
+            exit_codes[code as usize] = true;
+        }
     }
-    else if part.contains('-') {
-      let mut parts = part.split('-');
-      let start = parts.next().unwrap().parse::<i32>().unwrap();
-      let end = parts.next().unwrap().parse::<i32>().unwrap();
-      for i in start..=end {
-        exit_codes[i as usize] = true;
-      }
-    } else {
-      let code = part.parse::<i32>().unwrap();
-      exit_codes[code as usize] = true;
-    }
-  }
-  exit_codes
+    exit_codes
 }
 
 #[allow(clippy::type_complexity)]
 fn collect_matches(
     matches: &clap::ArgMatches,
-) -> anyhow::Result<(Command, impl Cache, Option<Duration>, Option<Duration>, [bool;256])> {
-
+) -> anyhow::Result<(
+    Command,
+    impl Cache,
+    Option<Duration>,
+    Option<Duration>,
+    [bool; 256],
+)> {
     let cmd = matches
         .get_one::<String>("command")
         .ok_or(anyhow!("unexpected failure to parse arguments"))?;
@@ -295,11 +318,11 @@ fn collect_matches(
         scope = scope.user(whoami::username());
     }
 
-    let record_exit_codes = if let Some(exit_codes) = matches.get_one::<String>("record-exit-codes") {
-      parse_exit_codes(exit_codes)
-    }
-    else {
-      parse_exit_codes("0")
+    let record_exit_codes = if let Some(exit_codes) = matches.get_one::<String>("record-exit-codes")
+    {
+        parse_exit_codes(exit_codes)
+    } else {
+        parse_exit_codes("0")
     };
 
     let look_back_arg = matches.get_one::<String>("look-back");
@@ -332,7 +355,13 @@ fn collect_matches(
 
     let cache = cache::DiskCache::new(cache_dir.clone());
 
-    Ok((Command::new(scope.build()?), cache, look_back, cache_for, record_exit_codes))
+    Ok((
+        Command::new(scope.build()?),
+        cache,
+        look_back,
+        cache_for,
+        record_exit_codes,
+    ))
 }
 
 fn run() -> anyhow::Result<i32> {
@@ -342,32 +371,46 @@ fn run() -> anyhow::Result<i32> {
 
     match matches.subcommand() {
         Some(("run", matches)) => {
-            let (mut command, cache, look_back, cache_for, record_exit_codes) = collect_matches(matches)?;
-            action::run(&mut command, &cache, look_back, cache_for, record_exit_codes)
+            let (mut command, cache, look_back, cache_for, record_exit_codes) =
+                collect_matches(matches)?;
+            action::run(
+                &mut command,
+                &cache,
+                look_back,
+                cache_for,
+                record_exit_codes,
+            )
         }
         Some(("read", matches)) => {
-            let (mut command, cache, look_back, _cache_for, _record_exit_codes) = collect_matches(matches)?;
-            let exit_code_on_cache_miss = matches.get_one::<i32>("cache-miss-exit-code").unwrap_or(&1);
+            let (mut command, cache, look_back, _cache_for, _record_exit_codes) =
+                collect_matches(matches)?;
+            let exit_code_on_cache_miss =
+                matches.get_one::<i32>("cache-miss-exit-code").unwrap_or(&1);
             action::read(&mut command, &cache, look_back, *exit_code_on_cache_miss)
         }
         Some(("force", matches)) => {
-            let (mut command, cache, _look_back, cache_for, record_exit_codes) = collect_matches(matches)?;
+            let (mut command, cache, _look_back, cache_for, record_exit_codes) =
+                collect_matches(matches)?;
             action::force(&mut command, &cache, cache_for, record_exit_codes)
         }
         Some(("remove", matches)) => {
-            let (mut command, cache, _look_back, _cache_for, _record_exit_codes) = collect_matches(matches)?;
+            let (mut command, cache, _look_back, _cache_for, _record_exit_codes) =
+                collect_matches(matches)?;
             action::remove(&mut command, &cache)
         }
         Some(("test", matches)) => {
-            let (mut command, cache, look_back, _cache_for, _record_exit_codes) = collect_matches(matches)?;
+            let (mut command, cache, look_back, _cache_for, _record_exit_codes) =
+                collect_matches(matches)?;
             action::test(&mut command, &cache, look_back)
         }
         Some(("explain", matches)) => {
-            let (mut command, cache, look_back, _cache_for, _record_exit_codes) = collect_matches(matches)?;
+            let (mut command, cache, look_back, _cache_for, _record_exit_codes) =
+                collect_matches(matches)?;
             action::explain(&mut command, &cache, look_back)
         }
         Some(("hash", matches)) => {
-            let (mut command, cache, _look_back, _cache_for, _record_exit_codes) = collect_matches(matches)?;
+            let (mut command, cache, _look_back, _cache_for, _record_exit_codes) =
+                collect_matches(matches)?;
             action::hash(&mut command, &cache)
         }
         _ => unreachable!("unknown subcommand not caught by clap"),

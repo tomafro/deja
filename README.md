@@ -58,19 +58,19 @@ Various other options add or remove things from the hash, giving finer control o
 
 ## Options
 
-`--watch-path [path]` returns the cached result while the content of the path remains the same (detected via a content hash). It can be used multiple times to watch multiple paths.
+`--watch-path [path]` returns the cached result until the path contents change (detected via a content hash). Multiple paths can be watched by providing the option multiple times.
 
-- `--watch-path Gemfile.lock` - Reuse the result while `Gemfile.lock` doesn't change
-- `--watch-path src` - Reuse the result while the the contents or `src` folder doesn't change
+- `--watch-path Gemfile.lock` - Reuse the result until `Gemfile.lock` changes
+- `--watch-path src` - Reuse the result until the contents `src` changes
 
-`--watch-scope [scope]` returns the cached result while the given scope remains the same. This accepts any string, and combined with shell substitution can be extremely powerful:
+`--watch-scope [scope]` returns the cached result until the scope changes. This accepts any string, and combined with shell substitution can be extremely powerful:
 
 - `--watch-scope "$(date +%Y-%m-%d)"` - Reuse the result throughout the day
 - `--watch-scope "$(git rev-parse HEAD)"` - Reuse the result for the current git commit
 
 As with `--watch-path`, `--watch-scope` can be provided multiple times to watch multiple scopes.
 
-`--watch-env` returns the cached result while given environment variables remain unchanged. This option can be provided multiple times to watch multiple different environment variables.
+`--watch-env` returns the cached result until the given environment variables change. This option can be provided multiple times to watch multiple different environment variables.
 
 `--exclude-pwd` removes the working directory from the cache key. Without this flag `deja` includes the working directory; cached results are only returned when called from the same directory. With this flag, cached results can be returned whatever directory the command is called from, but _only_ if `--exclude-pwd` was originally used. A result generated without `--exclude-pwd` will never be returned from a different directory.
 
@@ -83,7 +83,7 @@ As with `--watch-path`, `--watch-scope` can be provided multiple times to watch 
 - `--record-exit-codes 0,1` will cache the result if the exit code is `0` or `1`.
 - `--record-exit-codes 0,10-12,100+` will cache the result if the exit code is `0`, `10`, `11`, or `12`, or `100` or greater.
 
-`--look-back [duration]` limits how far back in time to look for a cached result. It accepts durations in the form `30s`, `5m`, `1h`, `30d`, etc. When `--look-back` is used, `deja` will only re-use a result if it was generated within the given duration. If no result is found within the look-back period, the command will be run and the result cached.
+`--look-back [duration]` limits how far back in time to look for a cached result. It accepts durations in the form `30s`, `5m`, `1h`, `30d`, etc. When `--look-back` is used, `deja` will only reuse a result if it was generated within the given duration. If no result is found within the period, the command will be run and the result cached.
 
 - `--look-back 30s` will return any result generated in the last 30 seconds.
 
