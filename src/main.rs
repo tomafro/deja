@@ -8,6 +8,7 @@ use crate::command::Command;
 use anyhow::anyhow;
 use clap::value_parser;
 use clap::Arg;
+use clap::ValueHint;
 use command::ScopeBuilder;
 use std::collections::HashMap;
 use std::io;
@@ -36,34 +37,44 @@ fn subcommand(
         .long("cache")
         .value_name("path")
         .help("Path used as cache")
-        .env(&env)
+        .env(env)
         .value_parser(value_parser!(PathBuf));
 
     cache = if let Some(cache_dir) = dirs::cache_dir() {
         let default_cache = cache_dir.join("deja").into_os_string();
         let default_cache_string = default_cache.to_string_lossy();
         cache.default_value(&default_cache)
-          .long_help(format!("Directory to store cache files (default: {default_cache_string}). Can also be set via the {env} variable."))
+          .long_help(format!(r#"Directory to store cache files (default: {default_cache_string}). Can also be set via the {env} variable."#))
           .hide_env(true)
+          .hide_default_value(true)
     } else {
         cache
     };
 
     let watch_path = Arg::new("watch-path")
         .long("watch-path")
+        .help_heading("Caching options")
         .value_name("path")
+        .value_hint(ValueHint::AnyPath)
         .help("Include path contents in cache key")
         .long_help(r#"
-Include path contents in cache key. Watching a path generates a hash of the contents and includes it in the cache key.
+Include path contents in cache key. Watching a path generates a hash of the contents and includes it in the cache key. The path can point to either a file or a directory. When given a directory, all files and subdirectories are included in the hash.
 
-This argument can be given multiple times to watch multiple paths."#)
+This option can be given multiple times to watch multiple paths.
+"#.trim())
         .value_parser(value_parser!(PathBuf))
         .action(clap::ArgAction::Append);
 
     let watch_scope = Arg::new("watch-scope")
         .long("watch-scope")
         .value_name("scope")
-        .help("Include given scope in cache key")
+        .help_heading("Caching options")
+        .help("Include scope string in cache key")
+        .long_help(r#"
+Include scope string in cache key. Any string can be given as a scope, which when combined with shell substitution can be extremely flexible. For example `--watch-scope "$(date +%Y-%m-%d)"` will include the current date.
+
+This option can be given multiple times to watch multiple scopes.
+"#.trim())
         .env("DEJA_WATCH_SCOPE")
         .hide_env(true)
         .action(clap::ArgAction::Append);
@@ -71,12 +82,22 @@ This argument can be given multiple times to watch multiple paths."#)
     let watch_env = Arg::new("watch-env")
         .long("watch-env")
         .value_name("env")
+        .help_heading("Caching options")
         .help("Include variable value in cache key")
+        .long_help(r#"
+Include variable value in cache key. Any environment variable can be given. For example `--watch-env MY_VAR` will include the value of the `MY_VAR` environment variable.
+
+This option can be given multiple times to watch multiple variables.
+"#.trim())
         .action(clap::ArgAction::Append);
 
     let exclude_pwd = Arg::new("exclude-pwd")
         .long("exclude-pwd")
         .help("Remove current directory from cache key")
+        .help_heading("Caching options")
+        .long_help(r#"
+Remove the current working directory from the cache key. By default, the current directory is always included in the cache key. Running the same command from a different directory will result in a cache miss. This flag changes this behaviour, so commands can be run from any location and hit the cache.
+"#.trim())
         .env("DEJA_IGNORE_PWD")
         .hide_env(true)
         .action(clap::ArgAction::SetTrue);
@@ -84,6 +105,10 @@ This argument can be given multiple times to watch multiple paths."#)
     let exclude_user = Arg::new("exclude-user")
         .long("exclude-user")
         .help("Remove current user from cache key")
+        .help_heading("Caching options")
+        .long_help(r#"
+Remove current user from cache key. By default, the current user is always included in the cache key. Running the same command as different users will result in a cache miss. This flag changes this behaviour, so commands can be run by any user and hit the cache.
+"#.trim())
         .env("DEJA_IGNORE_USER")
         .hide_env(true)
         .action(clap::ArgAction::SetTrue);
@@ -93,19 +118,26 @@ This argument can be given multiple times to watch multiple paths."#)
         .value_name("duration")
         .help("How far back in time to look for cached results")
         .env("DEJA_LOOK_BACK")
+        .help_heading("Retrieval options")
         .hide_env(true)
-        .long_help("When reading from the cache, only consider results created in the given time period (e.g. 30s, 15m, 1h, 5d)\n\nThis can be useful to ensure the result is still fresh.");
+        .long_help(r#"
+How far back in time to look for cached results. When this option is set, deja will only look back into the cache the given amount of time. Any cache hit before this will be ignored. The duration should be provided in a format like 5s, 30m, 2h, 1d, etc.
+"#.trim());
 
     let cache_for = Arg::new("cache-for")
         .long("cache-for")
         .value_name("duration")
         .help("How long a cached result should be valid")
+        .help_heading("Caching options")
         .env("DEJA_CACHE_FOR")
         .hide_env(true)
-        .long_help("When writing to the cache, only store results for the given time period (e.g. 30s, 15m, 1h, 5d)\n\nThis can be useful to ensure the result is still fresh.");
+        .long_help(r#"
+How long a cached result should be valid. When this option is set, any cached result will only ever be used for the given duration. After the duration has passed, the result will be considered stale and never returned. The duration should be provided in a format like 5s, 30m, 2h, 1d, etc.
+"#.trim());
 
     let command = Arg::new("command")
         .value_name("COMMAND")
+        .value_hint(ValueHint::CommandName)
         .required(true)
         .help("Command to run");
 
@@ -145,6 +177,7 @@ This argument can be given multiple times to watch multiple paths."#)
                 .env("DEJA_RECORD_EXIT_CODES")
                 .hide_env(true)
                 .help("Exit codes to record in the cache (default: 0)")
+                .help_heading("Caching options")
                 .hide_default_value(true)
                 .default_value("0"),
         );
@@ -231,7 +264,7 @@ fn cli() -> anyhow::Result<clap::Command> {
                 .long("debug")
                 .action(clap::ArgAction::SetTrue)
                 .global(true)
-                .hide(false),
+                .hide(true),
         )
         .subcommands(vec![
             run,
