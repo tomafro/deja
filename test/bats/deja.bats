@@ -308,3 +308,18 @@ setup() {
   deja hash --watch-path src -- mock-command
   assert_not_equal $first_output $output "returns different hash with different options"
 }
+
+@test "completions --shell bash" {
+  deja completions --shell bash
+  assert_success
+}
+
+@test "completions --shell fish" {
+  deja completions --shell fish
+  assert_success
+}
+
+@test "completions --shell zsh" {
+  deja completions --shell zsh
+  assert_success
+}

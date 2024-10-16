@@ -10,7 +10,9 @@ use clap::value_parser;
 use clap::Arg;
 use command::ScopeBuilder;
 use std::collections::HashMap;
+use std::io;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::time::Duration;
 
 use std::sync::OnceLock;
@@ -203,13 +205,22 @@ fn cli() -> anyhow::Result<clap::Command> {
     let force = subcommand("force", "Run and cache command", false, true);
     let remove = subcommand("remove", "Remove command from cache", false, false);
     let test = subcommand("test", "Test if command is cached", false, false);
-    let explain = subcommand("explain", "Explain cache key for command", false, false);
+    let explain = subcommand("explain", "Explain cache key for command", false, false).hide(true);
     let hash = subcommand(
         "hash",
         "Print hash generated for command and options",
         false,
         false,
     );
+
+    let completions = clap::command!()
+        .name("completions")
+        .args(vec![Arg::new("shell")
+            .long("shell")
+            .value_name("SHELL")
+            .value_parser(["bash", "fish", "zsh", "powershell"])
+            .required(true)
+            .help("Shell to generate completions for")]);
 
     Ok(clap::command!()
         .name("deja")
@@ -222,7 +233,16 @@ fn cli() -> anyhow::Result<clap::Command> {
                 .global(true)
                 .hide(false),
         )
-        .subcommands(vec![run, read, force, remove, test, explain, hash]))
+        .subcommands(vec![
+            run,
+            read,
+            force,
+            remove,
+            test,
+            explain,
+            hash,
+            completions,
+        ]))
 }
 
 fn parse_exit_codes(param: &str) -> [bool; 256] {
@@ -412,6 +432,12 @@ fn run() -> anyhow::Result<i32> {
             let (mut command, cache, _look_back, _cache_for, _record_exit_codes) =
                 collect_matches(matches)?;
             action::hash(&mut command, &cache)
+        }
+        Some(("completions", matches)) => {
+            let shell_name = matches.get_one::<String>("shell").unwrap();
+            let shell = clap_complete::Shell::from_str(shell_name).unwrap();
+            clap_complete::generate(shell, &mut cli().unwrap(), "deja", &mut io::stdout());
+            Ok(0)
         }
         _ => unreachable!("unknown subcommand not caught by clap"),
     }
