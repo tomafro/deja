@@ -43,8 +43,11 @@ fn subcommand(
     cache = if let Some(cache_dir) = dirs::cache_dir() {
         let default_cache = cache_dir.join("deja").into_os_string();
         let default_cache_string = default_cache.to_string_lossy();
+        let long_help = format!(r#"
+Directory to store cache files (default: {default_cache_string}). Can also be set via the {env} variable. Files are stored in this directory with the hash as the filename, only readable by the current user.
+"#).trim().to_owned();
         cache.default_value(&default_cache)
-          .long_help(format!(r#"Directory to store cache files (default: {default_cache_string}). Can also be set via the {env} variable."#))
+          .long_help(long_help)
           .hide_env(true)
           .hide_default_value(true)
     } else {
@@ -110,6 +113,7 @@ Remove the current working directory from the cache key. By default, the current
 Remove current user from cache key. By default, the current user is always included in the cache key. Running the same command as different users will result in a cache miss. This flag changes this behaviour, so commands can be run by any user and hit the cache.
 "#.trim())
         .env("DEJA_IGNORE_USER")
+        .hide(true) // While this option works, there is currently no way for any other user to read cache files, so it's not very useful.
         .hide_env(true)
         .action(clap::ArgAction::SetTrue);
 

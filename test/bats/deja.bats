@@ -178,6 +178,12 @@ setup() {
   assert_success_with_mock_command_output_matching $output_with_flag "returns previous result from when called with flag from different folder"
 }
 
+@test "run (check: cache files only read and writable by owner)" {
+  deja run -- mock-command
+  ls -al $DEJA_CACHE
+  command find $DEJA_CACHE -type f -perm 600 | grep .
+}
+
 @test "run (error: command not found)" {
   deja run -- unknown
   assert_handled_failure "fails when unknown command"
