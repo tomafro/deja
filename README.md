@@ -74,8 +74,6 @@ As with `--watch-path`, `--watch-scope` can be provided multiple times to watch 
 
 `--exclude-pwd` removes the working directory from the cache key. Without this flag `deja` includes the working directory; cached results are only returned when called from the same directory. With this flag, cached results can be returned whatever directory the command is called from, but _only_ if `--exclude-pwd` was originally used. A result generated without `--exclude-pwd` will never be returned from a different directory.
 
-`--exclude-user` removes the current user from the cache key. Normally `deja` includes the current user; cached results are only returned if called by the same user. With this flag, cached results can be shared by multiple users, but _only_ if `--exclude-user` was originally used. A result generated without `--exclude-user` will _never_ be returned to a different user.
-
 `--cache-for [duration]` limits for how long a cached result is valid. It accepts durations in the form `30s`, `5m`, `1h`, `30d`, etc. If a result is stored with `--cache-for`, it will never be returned after the duration has passed.
 
 `--record-exit-codes [codes]` expands the list of exit codes `deja` will cache. It accepts a comma separated list of either individual codes like `0,1`, inclusive ranges like `100-200`, or open-ended ranges like `0+`. By default, `deja` only caches the result of a command if the exit code is `0`. In some cases you may want other exit codes to be cached, for example if grepping a huge file for a string that may or may not be present.
