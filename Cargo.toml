@@ -14,13 +14,13 @@ exclude = [".github", "/test", "/bin"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anstyle = "1.0.6"
-anyhow = "1.0"
-clap = { version = "4.4.11", features = ["cargo", "string", "env", "color", "wrap_help", "unicode"] }
-clap_complete = "4.5.33"
-dirs = "5.0.1"
+anstyle = "1.0.0"
+anyhow = "1.0.0"
+clap = { version = "4.5.0", features = ["cargo", "string", "env", "color", "wrap_help", "unicode"] }
+clap_complete = "4.5.0"
+dirs = "5.0.0"
 humantime = "2.1.0"
-merkle_hash = "3.5"
-ron = { version = "0.8.1", features = ["integer128"] }
-serde = { version = "1", features = ["derive"] }
+merkle_hash = "3.5.0"
+ron = { version = "0.8.0", features = ["integer128"] }
+serde = { version = "1.0.0", features = ["derive"] }
 whoami = "1.5.0"
