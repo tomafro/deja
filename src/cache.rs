@@ -50,11 +50,12 @@ pub trait Cache {
 
 pub struct DiskCache {
     root: std::path::PathBuf,
+    permissions: u32,
 }
 
 impl DiskCache {
-    pub fn new(root: PathBuf) -> DiskCache {
-        DiskCache { root }
+    pub fn new(root: PathBuf, permissions: u32) -> DiskCache {
+        DiskCache { root, permissions }
     }
 
     fn path(&self, hash: &str) -> std::path::PathBuf {
@@ -93,9 +94,10 @@ impl Cache for DiskCache {
             .ok_or(unable_to_write_to_cache_error(&self.root))?;
         std::fs::create_dir_all(parent).map_err(|_| unable_to_write_to_cache_error(&self.root))?;
 
-        let mut options = OpenOptions::new();
-        options.read(true).write(true).create(true).mode(0o600);
-        let file = options
+        let file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .mode(self.permissions)
             .open(&path)
             .map_err(|_| unable_to_write_to_cache_error(&self.root))?;
         ron::ser::to_writer(file, result)

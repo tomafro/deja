@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap, error::Error, ffi::OsString, os::unix::ffi::OsStrExt, path::PathBuf,
+    collections::HashMap, error::Error, ffi::OsString, os::unix::ffi::OsStrExt, path::PathBuf
 };
 
 use merkle_hash::{Algorithm, MerkleTree};
@@ -26,6 +26,16 @@ impl From<&[u8]> for Hash {
     fn from(bytes: &[u8]) -> Self {
         Hash {
             hash: Algorithm::Blake3.compute_hash(bytes),
+        }
+    }
+}
+
+impl From<bool> for Hash {
+    fn from(b: bool) -> Self {
+        if b {
+            Hash::from("true")
+        } else {
+            Hash::from("false")
         }
     }
 }
