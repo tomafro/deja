@@ -52,11 +52,13 @@ unset DEJA_WATCH_SCOPE
 
 ## How deja works
 
-For each command, deja creates a hash from the command, arguments, current user and working directory. If a result for this hash is found in the cache, it is replayed. If not, the command is run and the result stored in the cache. By default, deja only caches the result if the command exits with status `0`. This can be changed with the `--record-exit-codes` option.
-
-Various other options add or remove things from the hash, giving finer control over when to use a cached result. There are also other subcommands to manipulate and query the cache.
+For each command, deja creates a hash from the command, arguments, user and working directory. If a result for this hash is found in the cache, its replayed. If not, the command is run, and if the exit code is 0, the result stored in the cache.  When replaying a command, the output to stdout and stderr is rewritten to the terminal in the same order as recorded. deja will then exit with the original exit code.
 
 ## Options
+
+`--cache [path]` sets the path to the cache directory. If the directory does not exist, it will be created. By default deja will use `$XDG_CACHE_HOME/deja or $HOME/.cache/deja` on Linux, or `$HOME/Library/Caches/deja` on macOS.
+
+`--share-cache` sets the cache to shared. By default the cache is per-user, and only the user who created the cache can read or write to it. When `--share-cache` is used, the cache is created with group read/write permissions, allowing other users to read and write to it.
 
 `--watch-path [path]` returns the cached result until the path contents change (detected via a content hash). Multiple paths can be watched by providing the option multiple times.
 

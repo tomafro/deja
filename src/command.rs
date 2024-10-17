@@ -39,6 +39,7 @@ pub struct ScopeBuilder {
     pub format: String,
     pub cmd: String,
     pub args: Vec<String>,
+    pub shared: bool,
     pub user: Option<String>,
     pub pwd: Option<OsString>,
     pub watch_paths: Vec<PathBuf>,
@@ -50,6 +51,7 @@ impl ScopeBuilder {
     pub fn new() -> Self {
         ScopeBuilder {
             format: env!("CARGO_PKG_VERSION").to_string(),
+            shared: false,
             ..Default::default()
         }
     }
@@ -61,6 +63,11 @@ impl ScopeBuilder {
 
     pub fn args(mut self, args: Vec<String>) -> Self {
         self.args = args;
+        self
+    }
+
+    pub fn shared(mut self, shared: bool) -> Self {
+        self.shared = shared;
         self
     }
 
@@ -93,6 +100,7 @@ impl ScopeBuilder {
         let format_hash = hash::Hash::from(&self.format);
         let cmd_hash = hash::Hash::from(&self.cmd);
         let args_hash = hash::Hash::from(&self.args);
+        let shared_hash = hash::Hash::from(self.shared);
         let user_hash = hash::Hash::from(&self.user);
         let pwd_hash = hash::Hash::from(&self.pwd);
         let watch_scope_hash = hash::Hash::from(&self.watch_scope);
@@ -102,6 +110,7 @@ impl ScopeBuilder {
             format_hash,
             cmd_hash,
             args_hash,
+            shared_hash,
             user_hash,
             pwd_hash,
             watch_scope_hash,

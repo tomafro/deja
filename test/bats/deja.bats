@@ -124,6 +124,8 @@ setup() {
   deja run --look-back 5s -- mock-command
   assert_success_with_mock_command_output_matching $first_output "returns previous result looking back 5s"
 
+  ls -al $DEJA_CACHE
+
   deja run --look-back 1s -- mock-command
   assert_success_with_mock_command_output_not_matching $first_output "returns fresh result if cached result is too stale"
 

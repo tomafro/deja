@@ -46,10 +46,11 @@ fn subcommand(
         let long_help = format!(r#"
 Directory to store cache files (default: {default_cache_string}). Can also be set via the {env} variable. Files are stored in this directory with the hash as the filename, only readable by the current user.
 "#).trim().to_owned();
-        cache.default_value(&default_cache)
-          .long_help(long_help)
-          .hide_env(true)
-          .hide_default_value(true)
+        cache
+            .default_value(&default_cache)
+            .long_help(long_help)
+            .hide_env(true)
+            .hide_default_value(true)
     } else {
         cache
     };
@@ -105,16 +106,11 @@ Remove the current working directory from the cache key. By default, the current
         .hide_env(true)
         .action(clap::ArgAction::SetTrue);
 
-    let exclude_user = Arg::new("exclude-user")
-        .long("exclude-user")
-        .help("Remove current user from cache key")
+    let shared_cache = Arg::new("share-cache")
+        .long("share-cache")
+        .help("Use a shared cache")
         .help_heading("Caching options")
-        .long_help(r#"
-Remove current user from cache key. By default, the current user is always included in the cache key. Running the same command as different users will result in a cache miss. This flag changes this behaviour, so commands can be run by any user and hit the cache.
-"#.trim())
-        .env("DEJA_IGNORE_USER")
-        .hide(true) // While this option works, there is currently no way for any other user to read cache files, so it's not very useful.
-        .hide_env(true)
+        .long_help(r#"Use a shared cache. By default, each user has their own cache. This flag changes this behaviour, so all users share the same cache. This can be useful when running the same command as different users, as the cache will be shared between them."#.trim())
         .action(clap::ArgAction::SetTrue);
 
     let look_back = Arg::new("look-back")
@@ -154,8 +150,8 @@ How long a cached result should be valid. When this option is set, any cached re
         watch_path,
         watch_scope,
         watch_env,
+        shared_cache,
         exclude_pwd,
-        exclude_user,
         look_back,
         cache_for,
         cache,
@@ -358,7 +354,8 @@ fn collect_matches(
     );
 
     let exclude_pwd = matches.get_flag("exclude-pwd");
-    let exclude_user = matches.get_flag("exclude-user");
+
+    let shared_cache = matches.get_flag("share-cache");
 
     let mut scope = ScopeBuilder::new()
         .cmd(cmd.to_string())
@@ -371,7 +368,9 @@ fn collect_matches(
         scope = scope.pwd(std::env::current_dir().unwrap());
     }
 
-    if !exclude_user {
+    if shared_cache {
+        scope = scope.shared(true);
+    } else {
         scope = scope.user(whoami::username());
     }
 
@@ -382,9 +381,7 @@ fn collect_matches(
         parse_exit_codes("0")
     };
 
-    let look_back_arg = matches.get_one::<String>("look-back");
-
-    let look_back = if let Some(s) = look_back_arg {
+    let look_back = if let Some(s) = matches.get_one::<String>("look-back") {
         Some(humantime::parse_duration(s).map_err(|_| {
             anyhow!(
                 "invalid duration '{}', use values like 15s, 30m, 3h, 4d etc",
@@ -395,9 +392,7 @@ fn collect_matches(
         None
     };
 
-    let cache_for_arg = matches.get_one::<String>("cache-for");
-
-    let cache_for = if let Some(s) = cache_for_arg {
+    let cache_for = if let Some(s) = matches.get_one::<String>("cache-for") {
         Some(humantime::parse_duration(s).map_err(|_| {
             anyhow!(
                 "invalid duration '{}', use values like 15s, 30m, 3h, 4d etc",
@@ -410,7 +405,13 @@ fn collect_matches(
 
     let cache_dir = matches.get_one::<PathBuf>("cache").unwrap();
 
-    let cache = cache::DiskCache::new(cache_dir.clone());
+    let cache_permissions = if shared_cache {
+        0o666
+    } else {
+        0o600
+    };
+
+    let cache = cache::DiskCache::new(cache_dir.clone(), cache_permissions);
 
     Ok((
         Command::new(scope.build()?),
