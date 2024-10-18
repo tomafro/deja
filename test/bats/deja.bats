@@ -1,6 +1,6 @@
+load 'test_helper'
 
 setup() {
-    load 'test_helper'
     deja_setup
     echo ""
 }

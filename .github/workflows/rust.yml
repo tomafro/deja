@@ -16,8 +16,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    - name: cargo install
-      run: cargo install --verbose --path .
+    - name: cargo build
+      run: cargo build --release
     - name: cargo test
       run: cargo test --verbose
     - name: bats test
