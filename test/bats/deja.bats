@@ -177,9 +177,17 @@ setup() {
   assert_success_with_mock_command_output_matching $output_with_flag "returns previous result from when called with flag from different folder"
 }
 
-@test "run (check: cache files only read and writable by owner)" {
+@test "run (check: private cache files and folders only read and writable by owner)" {
   deja run -- mock-command
   command find $DEJA_CACHE -type f -perm 600 | grep .
+  command find $DEJA_CACHE -type d -perm 700 | grep .
+}
+
+@test "run (check: shared cache files and folders read and writable by everyone)" {
+  deja run --share-cache -- mock-command
+  ls -al $DEJA_CACHE
+  command find $DEJA_CACHE -type f -perm 666 | grep .
+  command find $DEJA_CACHE -type d -perm 777 | grep .
 }
 
 @test "run (error: command not found)" {
