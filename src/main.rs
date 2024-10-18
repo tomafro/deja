@@ -47,10 +47,10 @@ fn subcommand(
 Directory to store cache files (default: {default_cache_string}). Can also be set via the {env} variable. Files are stored in this directory with the hash as the filename, only readable by the current user.
 "#).trim().to_owned();
         cache
-            .default_value(&default_cache)
             .long_help(long_help)
-            .hide_env(true)
+            .default_value(&default_cache)
             .hide_default_value(true)
+            .hide_env(true)
     } else {
         cache
     };
@@ -106,7 +106,7 @@ Remove the current working directory from the cache key. By default, the current
         .hide_env(true)
         .action(clap::ArgAction::SetTrue);
 
-    let shared_cache = Arg::new("share-cache")
+    let share_cache = Arg::new("share-cache")
         .long("share-cache")
         .help("Use a shared cache")
         .help_heading("Caching options")
@@ -150,7 +150,7 @@ How long a cached result should be valid. When this option is set, any cached re
         watch_path,
         watch_scope,
         watch_env,
-        shared_cache,
+        share_cache,
         exclude_pwd,
         look_back,
         cache_for,
@@ -355,7 +355,7 @@ fn collect_matches(
 
     let exclude_pwd = matches.get_flag("exclude-pwd");
 
-    let shared_cache = matches.get_flag("share-cache");
+    let share_cache = matches.get_flag("share-cache");
 
     let mut scope = ScopeBuilder::new()
         .cmd(cmd.to_string())
@@ -368,7 +368,10 @@ fn collect_matches(
         scope = scope.pwd(std::env::current_dir().unwrap());
     }
 
-    if shared_cache {
+    let cache = matches.get_one::<PathBuf>("cache").unwrap();
+    let cache_dir = cache.clone();
+
+    if share_cache {
         scope = scope.shared(true);
     } else {
         scope = scope.user(whoami::username());
@@ -403,15 +406,7 @@ fn collect_matches(
         None
     };
 
-    let cache_dir = matches.get_one::<PathBuf>("cache").unwrap();
-
-    let cache_permissions = if shared_cache {
-        0o666
-    } else {
-        0o600
-    };
-
-    let cache = cache::DiskCache::new(cache_dir.clone(), cache_permissions);
+    let cache = cache::DiskCache::new(cache_dir, share_cache);
 
     Ok((
         Command::new(scope.build()?),
