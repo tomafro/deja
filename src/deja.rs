@@ -1,19 +1,51 @@
 use crate::cache::Cache;
 use crate::cache::CacheResult;
 use crate::command::Command;
+use crate::command::CommandResult;
 use std::ops::Add;
 use std::time::Duration;
 use std::time::SystemTime;
 
+pub struct RecordOptions {
+    cache_for: Option<Duration>,
+    record_exit_codes: [bool; 256],
+}
+
+impl RecordOptions {
+    pub fn new(cache_for: Option<Duration>, record_exit_codes: [bool; 256]) -> RecordOptions {
+        RecordOptions {
+            cache_for,
+            record_exit_codes,
+        }
+    }
+
+    fn should_record_result(&self, result: &CommandResult) -> bool {
+        self.record_exit_codes[result.status as usize]
+    }
+
+    fn expires_at(&self) -> Option<SystemTime> {
+        self.cache_for.map(|d| SystemTime::now().add(d))
+    }
+}
+
+pub struct ReadOptions {
+    look_back: Option<Duration>,
+}
+
+impl ReadOptions {
+    pub fn new(look_back: Option<Duration>) -> ReadOptions {
+        ReadOptions { look_back }
+    }
+}
+
 fn record(
     cmd: &mut Command,
     cache: &impl Cache,
-    cache_for: Option<Duration>,
-    record_exit_codes: [bool; 256],
+    record_options: RecordOptions,
 ) -> anyhow::Result<i32> {
     let mut result = cmd.run()?;
-    if record_exit_codes[result.status as usize] {
-        result.expires = cache_for.map(|d| SystemTime::now().add(d));
+    if record_options.should_record_result(&result) {
+        result.expires = record_options.expires_at();
         cache.write(&cmd.scope.hash, &result)?;
     }
     Ok(result.status)
@@ -22,24 +54,27 @@ fn record(
 pub fn run(
     cmd: &mut Command,
     cache: &impl Cache,
-    look_back: Option<Duration>,
-    cache_for: Option<Duration>,
-    record_exit_codes: [bool; 256],
+    record_options: RecordOptions,
+    read_options: ReadOptions,
 ) -> anyhow::Result<i32> {
-    if let CacheResult::Fresh(result) = cache.result(&cmd.scope.hash, look_back, None)? {
+    if let CacheResult::Fresh(result) =
+        cache.result(&cmd.scope.hash, read_options.look_back, None)?
+    {
         Ok(result.replay())
     } else {
-        record(cmd, cache, cache_for, record_exit_codes)
+        record(cmd, cache, record_options)
     }
 }
 
 pub fn read(
     cmd: &mut Command,
     cache: &impl Cache,
-    look_back: Option<Duration>,
+    read_options: ReadOptions,
     cache_miss_exit_code: i32,
 ) -> anyhow::Result<i32> {
-    if let CacheResult::Fresh(result) = cache.result(&cmd.scope.hash, look_back, None)? {
+    if let CacheResult::Fresh(result) =
+        cache.result(&cmd.scope.hash, read_options.look_back, None)?
+    {
         Ok(result.replay())
     } else {
         Ok(cache_miss_exit_code)
@@ -49,21 +84,20 @@ pub fn read(
 pub fn force(
     cmd: &mut Command,
     cache: &impl Cache,
-    cache_for: Option<Duration>,
-    record_exit_codes: [bool; 256],
+    record_options: RecordOptions,
 ) -> anyhow::Result<i32> {
-    record(cmd, cache, cache_for, record_exit_codes)?;
+    record(cmd, cache, record_options)?;
     Ok(0)
 }
 
 pub fn explain(
     cmd: &mut Command,
     cache: &impl Cache,
-    look_back: Option<Duration>,
+    read_options: ReadOptions,
 ) -> anyhow::Result<i32> {
     println!("{}", cmd.scope.explanation().explain());
 
-    match cache.result(&cmd.scope.hash, look_back, None)? {
+    match cache.result(&cmd.scope.hash, read_options.look_back, None)? {
         CacheResult::Fresh(_) => {
             println!("Available in cache");
         }
@@ -90,9 +124,11 @@ pub fn explain(
 pub fn test(
     cmd: &mut Command,
     cache: &impl Cache,
-    look_back: Option<Duration>,
+    read_options: ReadOptions,
 ) -> anyhow::Result<i32> {
-    if let CacheResult::Fresh(result) = cache.result(&cmd.scope.hash, look_back, None)? {
+    if let CacheResult::Fresh(result) =
+        cache.result(&cmd.scope.hash, read_options.look_back, None)?
+    {
         println!("{:?}", result);
         Ok(0)
     } else {
