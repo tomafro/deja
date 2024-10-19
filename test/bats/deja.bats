@@ -119,12 +119,10 @@ setup() {
 
   first_output=$output
 
-  sleep 1
+  sleep 2
 
   deja run --look-back 5s -- mock-command
   assert_success_with_mock_command_output_matching $first_output "returns previous result looking back 5s"
-
-  ls -al $DEJA_CACHE
 
   deja run --look-back 1s -- mock-command
   assert_success_with_mock_command_output_not_matching $first_output "returns fresh result if cached result is too stale"
@@ -134,7 +132,7 @@ setup() {
   deja run --look-back 1s -- mock-command
   assert_success_with_mock_command_output_matching $fresh_output "new result is now cached for future calls"
 
-  deja run --look-back 1s -- mock-command
+  deja run -- mock-command
   assert_success_with_mock_command_output_matching $fresh_output "new result is also returned when no look back specified"
 }
 
@@ -175,14 +173,12 @@ setup() {
   assert_success_with_mock_command_output_not_matching $output_without_flag "returns different result when called without flag from different folder"
   assert_not_equal "$output" "$output_with_flag" "doesn't return output generated with flag when called without flag"
 
-
   deja run --debug --exclude-pwd -- mock-command
   assert_success_with_mock_command_output_matching $output_with_flag "returns previous result from when called with flag from different folder"
 }
 
 @test "run (check: cache files only read and writable by owner)" {
   deja run -- mock-command
-  ls -al $DEJA_CACHE
   command find $DEJA_CACHE -type f -perm 600 | grep .
 }
 
