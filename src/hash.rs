@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap, error::Error, ffi::OsString, os::unix::ffi::OsStrExt, path::PathBuf
+    collections::HashMap, error::Error, ffi::OsString, os::unix::ffi::OsStrExt, path::PathBuf,
 };
 
 use merkle_hash::{Algorithm, MerkleTree};

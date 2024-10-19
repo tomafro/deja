@@ -1,6 +1,6 @@
-mod deja;
 mod cache;
 mod command;
+mod deja;
 mod hash;
 
 use crate::cache::Cache;
@@ -10,11 +10,12 @@ use clap::value_parser;
 use clap::Arg;
 use clap::ValueHint;
 use command::ScopeBuilder;
+use deja::ReadOptions;
+use deja::RecordOptions;
 use std::collections::HashMap;
 use std::io;
 use std::path::PathBuf;
 use std::str::FromStr;
-use std::time::Duration;
 
 use std::sync::OnceLock;
 
@@ -303,16 +304,7 @@ fn parse_exit_codes(param: &str) -> [bool; 256] {
     exit_codes
 }
 
-#[allow(clippy::type_complexity)]
-fn collect_matches(
-    matches: &clap::ArgMatches,
-) -> anyhow::Result<(
-    Command,
-    impl Cache,
-    Option<Duration>,
-    Option<Duration>,
-    [bool; 256],
-)> {
+fn command(matches: &clap::ArgMatches) -> anyhow::Result<Command> {
     let cmd = matches
         .get_one::<String>("command")
         .ok_or(anyhow!("unexpected failure to parse arguments"))?;
@@ -368,31 +360,31 @@ fn collect_matches(
         scope = scope.pwd(std::env::current_dir().unwrap());
     }
 
-    let cache = matches.get_one::<PathBuf>("cache").unwrap();
-    let cache_dir = cache.clone();
-
     if share_cache {
         scope = scope.shared(true);
     } else {
         scope = scope.user(whoami::username());
     }
 
+    Ok(Command::new(scope.build()?))
+}
+
+fn cache(matches: &clap::ArgMatches) -> anyhow::Result<impl Cache> {
+    let share_cache = matches.get_flag("share-cache");
+    let cache = matches.get_one::<PathBuf>("cache").unwrap();
+    let cache_dir = cache.clone();
+
+    let cache = cache::DiskCache::new(cache_dir, share_cache);
+
+    Ok(cache)
+}
+
+fn record_options(matches: &clap::ArgMatches) -> anyhow::Result<RecordOptions> {
     let record_exit_codes = if let Some(exit_codes) = matches.get_one::<String>("record-exit-codes")
     {
         parse_exit_codes(exit_codes)
     } else {
         parse_exit_codes("0")
-    };
-
-    let look_back = if let Some(s) = matches.get_one::<String>("look-back") {
-        Some(humantime::parse_duration(s).map_err(|_| {
-            anyhow!(
-                "invalid duration '{}', use values like 15s, 30m, 3h, 4d etc",
-                s
-            )
-        })?)
-    } else {
-        None
     };
 
     let cache_for = if let Some(s) = matches.get_one::<String>("cache-for") {
@@ -406,15 +398,22 @@ fn collect_matches(
         None
     };
 
-    let cache = cache::DiskCache::new(cache_dir, share_cache);
+    Ok(RecordOptions::new(cache_for, record_exit_codes))
+}
 
-    Ok((
-        Command::new(scope.build()?),
-        cache,
-        look_back,
-        cache_for,
-        record_exit_codes,
-    ))
+fn read_options(matches: &clap::ArgMatches) -> anyhow::Result<ReadOptions> {
+    let look_back = if let Some(s) = matches.get_one::<String>("look-back") {
+        Some(humantime::parse_duration(s).map_err(|_| {
+            anyhow!(
+                "invalid duration '{}', use values like 15s, 30m, 3h, 4d etc",
+                s
+            )
+        })?)
+    } else {
+        None
+    };
+
+    Ok(ReadOptions::new(look_back))
 }
 
 fn run() -> anyhow::Result<i32> {
@@ -423,49 +422,35 @@ fn run() -> anyhow::Result<i32> {
     DEBUG.set(matches.get_flag("debug")).unwrap();
 
     match matches.subcommand() {
-        Some(("run", matches)) => {
-            let (mut command, cache, look_back, cache_for, record_exit_codes) =
-                collect_matches(matches)?;
-            deja::run(
-                &mut command,
-                &cache,
-                look_back,
-                cache_for,
-                record_exit_codes,
-            )
-        }
-        Some(("read", matches)) => {
-            let (mut command, cache, look_back, _cache_for, _record_exit_codes) =
-                collect_matches(matches)?;
-            let exit_code_on_cache_miss =
-                matches.get_one::<i32>("cache-miss-exit-code").unwrap_or(&1);
-            deja::read(&mut command, &cache, look_back, *exit_code_on_cache_miss)
-        }
-        Some(("force", matches)) => {
-            let (mut command, cache, _look_back, cache_for, record_exit_codes) =
-                collect_matches(matches)?;
-            deja::force(&mut command, &cache, cache_for, record_exit_codes)
-        }
-        Some(("remove", matches)) => {
-            let (mut command, cache, _look_back, _cache_for, _record_exit_codes) =
-                collect_matches(matches)?;
-            deja::remove(&mut command, &cache)
-        }
-        Some(("test", matches)) => {
-            let (mut command, cache, look_back, _cache_for, _record_exit_codes) =
-                collect_matches(matches)?;
-            deja::test(&mut command, &cache, look_back)
-        }
-        Some(("explain", matches)) => {
-            let (mut command, cache, look_back, _cache_for, _record_exit_codes) =
-                collect_matches(matches)?;
-            deja::explain(&mut command, &cache, look_back)
-        }
-        Some(("hash", matches)) => {
-            let (mut command, cache, _look_back, _cache_for, _record_exit_codes) =
-                collect_matches(matches)?;
-            deja::hash(&mut command, &cache)
-        }
+        Some(("run", matches)) => deja::run(
+            &mut command(matches)?,
+            &cache(matches)?,
+            record_options(matches)?,
+            read_options(matches)?,
+        ),
+        Some(("read", matches)) => deja::read(
+            &mut command(matches)?,
+            &cache(matches)?,
+            read_options(matches)?,
+            *matches.get_one::<i32>("cache-miss-exit-code").unwrap_or(&1),
+        ),
+        Some(("force", matches)) => deja::force(
+            &mut command(matches)?,
+            &cache(matches)?,
+            record_options(matches)?,
+        ),
+        Some(("remove", matches)) => deja::remove(&mut command(matches)?, &cache(matches)?),
+        Some(("test", matches)) => deja::test(
+            &mut command(matches)?,
+            &cache(matches)?,
+            read_options(matches)?,
+        ),
+        Some(("explain", matches)) => deja::explain(
+            &mut command(matches)?,
+            &cache(matches)?,
+            read_options(matches)?,
+        ),
+        Some(("hash", matches)) => deja::hash(&mut command(matches)?, &cache(matches)?),
         Some(("completions", matches)) => {
             let shell_name = matches.get_one::<String>("shell").unwrap();
             let shell = clap_complete::Shell::from_str(shell_name).unwrap();
