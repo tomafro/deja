@@ -8,10 +8,6 @@ deja_setup() {
   load '../vendor/bats-assert/load'
   bats_require_minimum_version 1.5.0
 
-  if [[ $BATS_SUITE_TEST_NUMBER -eq 0 ]]; then
-    cargo build --release
-  fi
-
   deja_bin="$PWD/target/release/deja"
 
   mkdir -p tmp/bats
