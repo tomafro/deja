@@ -1,0 +1,14 @@
+#!/bin/bash
+
+green="\e[32m"
+grey="\e[90m"
+endcolour="\e[0m"
+
+function command {
+  printf "$green$1$endcolour $grey($2)$endcolour\n\n"
+  $1
+}
+
+command "cargo build --release" "building release binary"
+echo
+command "./bin/bats test/bats/deja.bats" "running deja.bats"

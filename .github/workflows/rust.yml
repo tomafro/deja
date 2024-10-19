@@ -20,7 +20,7 @@ jobs:
       run: cargo build --release
     - name: cargo test
       run: cargo test --verbose
-    - name: bats test
-      run: ./bin/bats test/bats/*.bats
+    - name: bats tests
+      run: ./bin/bats-tests
     - name: cargo clippy
       run: cargo clippy --verbose -- --deny warnings
