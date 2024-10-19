@@ -1,4 +1,4 @@
-mod action;
+mod deja;
 mod cache;
 mod command;
 mod hash;
@@ -426,7 +426,7 @@ fn run() -> anyhow::Result<i32> {
         Some(("run", matches)) => {
             let (mut command, cache, look_back, cache_for, record_exit_codes) =
                 collect_matches(matches)?;
-            action::run(
+            deja::run(
                 &mut command,
                 &cache,
                 look_back,
@@ -439,32 +439,32 @@ fn run() -> anyhow::Result<i32> {
                 collect_matches(matches)?;
             let exit_code_on_cache_miss =
                 matches.get_one::<i32>("cache-miss-exit-code").unwrap_or(&1);
-            action::read(&mut command, &cache, look_back, *exit_code_on_cache_miss)
+            deja::read(&mut command, &cache, look_back, *exit_code_on_cache_miss)
         }
         Some(("force", matches)) => {
             let (mut command, cache, _look_back, cache_for, record_exit_codes) =
                 collect_matches(matches)?;
-            action::force(&mut command, &cache, cache_for, record_exit_codes)
+            deja::force(&mut command, &cache, cache_for, record_exit_codes)
         }
         Some(("remove", matches)) => {
             let (mut command, cache, _look_back, _cache_for, _record_exit_codes) =
                 collect_matches(matches)?;
-            action::remove(&mut command, &cache)
+            deja::remove(&mut command, &cache)
         }
         Some(("test", matches)) => {
             let (mut command, cache, look_back, _cache_for, _record_exit_codes) =
                 collect_matches(matches)?;
-            action::test(&mut command, &cache, look_back)
+            deja::test(&mut command, &cache, look_back)
         }
         Some(("explain", matches)) => {
             let (mut command, cache, look_back, _cache_for, _record_exit_codes) =
                 collect_matches(matches)?;
-            action::explain(&mut command, &cache, look_back)
+            deja::explain(&mut command, &cache, look_back)
         }
         Some(("hash", matches)) => {
             let (mut command, cache, _look_back, _cache_for, _record_exit_codes) =
                 collect_matches(matches)?;
-            action::hash(&mut command, &cache)
+            deja::hash(&mut command, &cache)
         }
         Some(("completions", matches)) => {
             let shell_name = matches.get_one::<String>("shell").unwrap();
