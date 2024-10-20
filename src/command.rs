@@ -13,22 +13,24 @@ use std::{
 
 use crate::hash::{self, Hash};
 
-fn capture_output<R>(start: Instant, reader: R, stdout: bool) -> thread::JoinHandle<Vec<Output>>
+fn capture_output<R>(
+    start: Instant,
+    reader: R,
+    stdout: bool,
+) -> thread::JoinHandle<Vec<(u128, String)>>
 where
     R: BufRead + Send + 'static,
 {
     let mut result = Vec::new();
     thread::spawn(move || {
         for line in reader.lines() {
-            let text = line.unwrap_or("unable to hash path".to_string());
-            let output = if stdout {
-                println!("{}", text);
-                Output::Out(start.elapsed().as_nanos(), text)
+            let text = line.unwrap();
+            if stdout {
+                println!("{}", &text);
             } else {
-                eprintln!("{}", text);
-                Output::Err(start.elapsed().as_nanos(), text)
-            };
-            result.push(output);
+                eprintln!("{}", &text);
+            }
+            result.push((start.elapsed().as_nanos(), text));
         }
         result
     })
@@ -275,9 +277,8 @@ impl Command {
             .wait()
             .map_err(|e| anyhow!("error waiting for command to finish: {}", e))?;
 
-        let mut output = stdout_handle.join().unwrap();
-        output.append(&mut stderr_handle.join().unwrap());
-        output.sort_by_key(|a| a.time());
+        let stdout = stdout_handle.join().unwrap();
+        let stderr = stderr_handle.join().unwrap();
 
         let status = status.code().unwrap_or(1);
 
@@ -285,7 +286,8 @@ impl Command {
             command: self.clone(),
             created: at,
             status,
-            output,
+            stdout,
+            stderr,
             expires: None,
         })
     }
@@ -302,38 +304,43 @@ impl std::fmt::Display for Command {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub enum Output {
-    Err(u128, String),
-    Out(u128, String),
-}
-
-impl Output {
-    pub fn time(&self) -> u128 {
-        match self {
-            Output::Err(t, _) => *t,
-            Output::Out(t, _) => *t,
-        }
-    }
-}
-
-#[derive(Debug, Deserialize, Serialize)]
 pub struct CommandResult {
     pub command: Command,
     pub created: SystemTime,
     pub expires: Option<SystemTime>,
     pub status: i32,
-    output: Vec<Output>,
+    stdout: Vec<(u128, String)>,
+    stderr: Vec<(u128, String)>,
 }
 
 impl CommandResult {
     pub fn replay(&self) -> i32 {
-        let output = self.output.as_slice();
-        for line in output {
-            match line {
-                Output::Err(_, t) => eprintln!("{}", t),
-                Output::Out(_, t) => println!("{}", t),
+        let mut out = self.stdout.iter();
+        let mut out_line = out.next();
+
+        let mut err = self.stderr.iter();
+        let mut err_line = err.next();
+
+        while out_line.is_some() || err_line.is_some() {
+            if let (Some((ot, os)), Some((et, es))) = (out_line, err_line) {
+                if ot < et {
+                    println!("{}", os);
+                    out_line = out.next();
+                } else {
+                    eprintln!("{}", es);
+                    err_line = err.next();
+                }
+            }
+            if let Some((_, os)) = out_line {
+                println!("{}", os);
+                out_line = out.next();
+            }
+            if let Some((_, es)) = err_line {
+                eprintln!("{}", es);
+                err_line = err.next();
             }
         }
+
         self.status
     }
 }
