@@ -15,12 +15,17 @@ use std::{
 
 use crate::hash::{self, Hash};
 
-fn capture_output<R, W>(start: Instant, mut reader: R, mut writer: W) -> thread::JoinHandle<Vec<u8>>
+fn capture_output<R, W, O>(
+    start: Instant,
+    mut reader: R,
+    mut writer: W,
+    mut output: O,
+) -> thread::JoinHandle<W>
 where
     R: BufRead + Send + 'static,
     W: Write + Send + 'static,
+    O: Write + Send + 'static,
 {
-    let mut result = Vec::new();
     thread::spawn(move || {
         let mut line = &mut String::new();
         while let Ok(count) = reader.read_line(&mut line) {
@@ -29,16 +34,16 @@ where
             }
             let bytes = line.as_bytes();
 
-            writer.write_all(bytes).unwrap();
+            output.write_all(bytes).unwrap();
 
             let elapsed = start.elapsed().as_nanos().to_be_bytes();
 
-            result.write_all(&elapsed).unwrap();
-            result.write_all(bytes).unwrap();
+            writer.write_all(&elapsed).unwrap();
+            writer.write_all(bytes).unwrap();
 
             line.clear();
         }
-        result
+        writer
     })
 }
 
@@ -271,13 +276,15 @@ impl Command {
             .stdout
             .take()
             .ok_or_else(|| anyhow!("unable to capture stdout"))?;
-        let stdout_handle = capture_output(start, BufReader::new(stdout), std::io::stdout());
+        let stdout_handle =
+            capture_output(start, BufReader::new(stdout), Vec::new(), std::io::stdout());
 
         let stderr = child
             .stderr
             .take()
             .ok_or_else(|| anyhow!("unable to capture stderr"))?;
-        let stderr_handle = capture_output(start, BufReader::new(stderr), std::io::stderr());
+        let stderr_handle =
+            capture_output(start, BufReader::new(stderr), Vec::new(), std::io::stderr());
 
         let status = child
             .wait()
