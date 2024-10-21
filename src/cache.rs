@@ -18,7 +18,7 @@ pub enum CacheResult {
 
 pub trait Cache {
     fn read(&self, hash: &str) -> anyhow::Result<Option<CommandResult>>;
-    fn write(&self, hash: &str, result: &CommandResult) -> anyhow::Result<()>;
+    fn write(&self, hash: &str, result: CommandResult) -> anyhow::Result<()>;
     fn remove(&self, hash: &str) -> anyhow::Result<bool>;
     fn result(
         &self,
@@ -104,7 +104,7 @@ impl Cache for DiskCache {
         }
     }
 
-    fn write(&self, hash: &str, result: &CommandResult) -> anyhow::Result<()> {
+    fn write(&self, hash: &str, result: CommandResult) -> anyhow::Result<()> {
         let path = self.path(hash);
         create_cache_dir(path.parent().unwrap(), self.shared)
             .map_err(|_| unable_to_write_to_cache_error(&self.root))?;
@@ -122,7 +122,7 @@ impl Cache for DiskCache {
         file_permissions.set_mode(mode);
         std::fs::set_permissions(path, file_permissions)?;
 
-        ron::ser::to_writer(file, result)
+        ron::ser::to_writer(file, &result)
             .map_err(|_| unable_to_write_to_cache_error(&self.root))?;
         Ok(())
     }
