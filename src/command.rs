@@ -1,8 +1,10 @@
 use anyhow::anyhow;
+use core::str;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::ffi::OsString;
 use std::fmt::Formatter;
+use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::{
     io::{BufRead, BufReader},
@@ -13,24 +15,28 @@ use std::{
 
 use crate::hash::{self, Hash};
 
-fn capture_output<R>(
-    start: Instant,
-    reader: R,
-    stdout: bool,
-) -> thread::JoinHandle<Vec<(u128, String)>>
+fn capture_output<R, W>(start: Instant, mut reader: R, mut writer: W) -> thread::JoinHandle<Vec<u8>>
 where
     R: BufRead + Send + 'static,
+    W: Write + Send + 'static,
 {
     let mut result = Vec::new();
     thread::spawn(move || {
-        for line in reader.lines() {
-            let text = line.unwrap();
-            if stdout {
-                println!("{}", &text);
-            } else {
-                eprintln!("{}", &text);
+        let mut line = &mut String::new();
+        while let Ok(count) = reader.read_line(&mut line) {
+            if count == 0 {
+                break;
             }
-            result.push((start.elapsed().as_nanos(), text));
+            let bytes = line.as_bytes();
+
+            writer.write_all(bytes).unwrap();
+
+            let elapsed = start.elapsed().as_nanos().to_be_bytes();
+
+            result.write_all(&elapsed).unwrap();
+            result.write_all(bytes).unwrap();
+
+            line.clear();
         }
         result
     })
@@ -265,13 +271,13 @@ impl Command {
             .stdout
             .take()
             .ok_or_else(|| anyhow!("unable to capture stdout"))?;
-        let stdout_handle = capture_output(start, BufReader::new(stdout), true);
+        let stdout_handle = capture_output(start, BufReader::new(stdout), std::io::stdout());
 
         let stderr = child
             .stderr
             .take()
             .ok_or_else(|| anyhow!("unable to capture stderr"))?;
-        let stderr_handle = capture_output(start, BufReader::new(stderr), false);
+        let stderr_handle = capture_output(start, BufReader::new(stderr), std::io::stderr());
 
         let status = child
             .wait()
@@ -309,35 +315,70 @@ pub struct CommandResult {
     pub created: SystemTime,
     pub expires: Option<SystemTime>,
     pub status: i32,
-    stdout: Vec<(u128, String)>,
-    stderr: Vec<(u128, String)>,
+    stdout: Vec<u8>,
+    stderr: Vec<u8>,
+}
+
+struct OutputReader<'a> {
+    reader: BufReader<&'a [u8]>,
+}
+
+impl<'a> Iterator for OutputReader<'a> {
+    type Item = (u128, String);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let mut line = String::new();
+        let mut bytes: [u8; 16] = [0; 16];
+
+        // First 16 bytes are the timestamp
+
+        match self.reader.read_exact(&mut bytes) {
+            Ok(()) => (),
+            Err(_) => return None,
+        }
+
+        // Following the timestamp is the line contents
+
+        match self.reader.read_line(&mut line) {
+            Ok(0) => None,
+            Ok(_) => Some((u128::from_be_bytes(bytes), line.to_string())),
+            Err(_) => None,
+        }
+    }
 }
 
 impl CommandResult {
     pub fn replay(&self) -> i32 {
-        let mut out = self.stdout.iter();
-        let mut out_line = out.next();
+        let mut stdout = OutputReader {
+            reader: BufReader::new(self.stdout.as_slice()),
+        }
+        .peekable();
 
-        let mut err = self.stderr.iter();
-        let mut err_line = err.next();
+        let mut stderr = OutputReader {
+            reader: BufReader::new(self.stderr.as_slice()),
+        }
+        .peekable();
 
-        while out_line.is_some() || err_line.is_some() {
-            if let (Some((ot, os)), Some((et, es))) = (out_line, err_line) {
-                if ot < et {
-                    println!("{}", os);
-                    out_line = out.next();
-                } else {
-                    eprintln!("{}", es);
-                    err_line = err.next();
+        loop {
+            match (stdout.peek(), stderr.peek()) {
+                (Some((ot, ol)), Some((et, el))) => {
+                    if ot < et {
+                        print!("{}", ol);
+                        stdout.next();
+                    } else {
+                        eprint!("{}", el);
+                        stderr.next();
+                    }
                 }
-            }
-            if let Some((_, os)) = out_line {
-                println!("{}", os);
-                out_line = out.next();
-            }
-            if let Some((_, es)) = err_line {
-                eprintln!("{}", es);
-                err_line = err.next();
+                (Some((_, ol)), None) => {
+                    print!("{}", ol);
+                    stdout.next();
+                }
+                (None, Some((_, el))) => {
+                    eprint!("{}", el);
+                    stderr.next();
+                }
+                (None, None) => break,
             }
         }
 
