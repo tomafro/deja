@@ -44,11 +44,14 @@ fn record(
     record_options: RecordOptions,
 ) -> anyhow::Result<i32> {
     let mut result = cmd.run()?;
+    let status = result.status;
+
     if record_options.should_record_result(&result) {
         result.expires = record_options.expires_at();
-        cache.write(&cmd.scope.hash, &result)?;
+        cache.write(&cmd.scope.hash, result)?;
     }
-    Ok(result.status)
+
+    Ok(status)
 }
 
 pub fn run(
