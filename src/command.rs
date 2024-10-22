@@ -249,7 +249,11 @@ impl Command {
         Command { scope }
     }
 
-    pub fn run(&mut self) -> anyhow::Result<CommandResult> {
+    pub fn run<O, E>(&mut self, stdout_capture: O, stderr_capture: E) -> anyhow::Result<(i32, O, E)>
+    where
+        O: Write + Send + 'static,
+        E: Write + Send + 'static,
+    {
         let mut child = std::process::Command::new(&self.scope.cmd)
             .args(&self.scope.args)
             .stdout(Stdio::piped())
@@ -269,40 +273,40 @@ impl Command {
                 anyhow!("{}", message)
             })?;
 
-        let at = SystemTime::now();
         let start = Instant::now();
 
-        let stdout = child
+        let child_stdout = child
             .stdout
             .take()
             .ok_or_else(|| anyhow!("unable to capture stdout"))?;
-        let stdout_handle =
-            capture_output(start, BufReader::new(stdout), Vec::new(), std::io::stdout());
+        let child_stdout_handle = capture_output(
+            start,
+            BufReader::new(child_stdout),
+            stdout_capture,
+            std::io::stdout(),
+        );
 
-        let stderr = child
+        let child_stderr = child
             .stderr
             .take()
             .ok_or_else(|| anyhow!("unable to capture stderr"))?;
-        let stderr_handle =
-            capture_output(start, BufReader::new(stderr), Vec::new(), std::io::stderr());
+        let child_stderr_handle = capture_output(
+            start,
+            BufReader::new(child_stderr),
+            stderr_capture,
+            std::io::stderr(),
+        );
 
         let status = child
             .wait()
-            .map_err(|e| anyhow!("error waiting for command to finish: {}", e))?;
+            .map_err(|e| anyhow!("error waiting for command to finish: {}", e))?
+            .code()
+            .unwrap_or(1);
 
-        let stdout = stdout_handle.join().unwrap();
-        let stderr = stderr_handle.join().unwrap();
+        let stdout = child_stdout_handle.join().unwrap();
+        let stderr = child_stderr_handle.join().unwrap();
 
-        let status = status.code().unwrap_or(1);
-
-        Ok(CommandResult {
-            command: self.clone(),
-            created: at,
-            status,
-            stdout,
-            stderr,
-            expires: None,
-        })
+        Ok((status, stdout, stderr))
     }
 }
 
@@ -316,14 +320,58 @@ impl std::fmt::Display for Command {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize)]
-pub struct CommandResult {
-    pub command: Command,
-    pub created: SystemTime,
-    pub expires: Option<SystemTime>,
-    pub status: i32,
-    stdout: Vec<u8>,
-    stderr: Vec<u8>,
+pub trait CommandResult {
+    fn created(&self) -> SystemTime;
+    fn expires(&self) -> Option<SystemTime>;
+    fn status(&self) -> i32;
+    fn stdout(&self) -> &[u8];
+    fn stderr(&self) -> &[u8];
+
+    fn has_expired(&self) -> bool {
+        self.expires()
+            .map_or(false, |expires| expires < SystemTime::now())
+    }
+
+    fn is_older_than(&self, look_back: std::time::Duration) -> bool {
+        self.created().elapsed().unwrap() > look_back
+    }
+
+    fn replay(&self) -> i32 {
+        let mut stdout = OutputReader {
+            reader: BufReader::new(self.stdout()),
+        }
+        .peekable();
+
+        let mut stderr = OutputReader {
+            reader: BufReader::new(self.stderr()),
+        }
+        .peekable();
+
+        loop {
+            match (stdout.peek(), stderr.peek()) {
+                (Some((ot, ol)), Some((et, el))) => {
+                    if ot < et {
+                        print!("{}", ol);
+                        stdout.next();
+                    } else {
+                        eprint!("{}", el);
+                        stderr.next();
+                    }
+                }
+                (Some((_, ol)), None) => {
+                    print!("{}", ol);
+                    stdout.next();
+                }
+                (None, Some((_, el))) => {
+                    eprint!("{}", el);
+                    stderr.next();
+                }
+                (None, None) => break,
+            }
+        }
+
+        self.status()
+    }
 }
 
 struct OutputReader<'a> {
@@ -351,44 +399,5 @@ impl<'a> Iterator for OutputReader<'a> {
             Ok(_) => Some((u128::from_be_bytes(bytes), line.to_string())),
             Err(_) => None,
         }
-    }
-}
-
-impl CommandResult {
-    pub fn replay(&self) -> i32 {
-        let mut stdout = OutputReader {
-            reader: BufReader::new(self.stdout.as_slice()),
-        }
-        .peekable();
-
-        let mut stderr = OutputReader {
-            reader: BufReader::new(self.stderr.as_slice()),
-        }
-        .peekable();
-
-        loop {
-            match (stdout.peek(), stderr.peek()) {
-                (Some((ot, ol)), Some((et, el))) => {
-                    if ot < et {
-                        print!("{}", ol);
-                        stdout.next();
-                    } else {
-                        eprint!("{}", el);
-                        stderr.next();
-                    }
-                }
-                (Some((_, ol)), None) => {
-                    print!("{}", ol);
-                    stdout.next();
-                }
-                (None, Some((_, el))) => {
-                    eprint!("{}", el);
-                    stderr.next();
-                }
-                (None, None) => break,
-            }
-        }
-
-        self.status
     }
 }
