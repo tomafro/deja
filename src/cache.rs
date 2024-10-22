@@ -1,43 +1,36 @@
 use anyhow::{anyhow, Error};
+use serde::{Deserialize, Serialize};
 
-use crate::command::CommandResult;
+use crate::command::{Command, CommandResult};
 use crate::debug;
+use crate::deja::RecordOptions;
 use std::fs::OpenOptions;
 use std::io::BufReader;
-use std::ops::Add;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
-pub enum CacheResult {
-    Fresh(Box<CommandResult>),
+pub enum CacheResult<T> {
+    Fresh(Box<T>),
     Stale(SystemTime),
     Expired(SystemTime),
     Missing,
 }
 
-pub trait Cache {
-    fn read(&self, hash: &str) -> anyhow::Result<Option<CommandResult>>;
-    fn write(&self, hash: &str, result: CommandResult) -> anyhow::Result<()>;
+pub trait Cache<T: CommandResult> {
+    fn read(&self, hash: &str) -> anyhow::Result<Option<T>>;
     fn remove(&self, hash: &str) -> anyhow::Result<bool>;
-    fn result(
-        &self,
-        hash: &str,
-        look_back: Option<Duration>,
-        now: Option<SystemTime>,
-    ) -> anyhow::Result<CacheResult> {
-        if let Some(result) = self.read(hash)? {
-            let now = now.unwrap_or(SystemTime::now());
+    fn record(&self, command: &mut Command, options: RecordOptions) -> anyhow::Result<i32>;
 
-            if let Some(expires_at) = result.expires {
-                if expires_at < now {
-                    return Ok(CacheResult::Expired(expires_at));
-                }
+    fn find(&self, hash: &str, look_back: Option<Duration>) -> anyhow::Result<CacheResult<T>> {
+        if let Some(result) = self.read(hash)? {
+            if result.has_expired() {
+                return Ok(CacheResult::Expired(result.expires().unwrap()));
             }
 
-            if let Some(look_back) = look_back {
-                if result.created.add(look_back) < now {
-                    return Ok(CacheResult::Stale(result.created));
+            if let Some(duration) = look_back {
+                if result.is_older_than(duration) {
+                    return Ok(CacheResult::Stale(result.created()));
                 }
             }
 
@@ -60,6 +53,29 @@ impl DiskCache {
 
     fn path(&self, hash: &str) -> std::path::PathBuf {
         self.root.join(hash)
+    }
+
+    fn write(&self, hash: &str, entry: DiskCacheEntry) -> anyhow::Result<()> {
+        let path = self.path(hash);
+        create_cache_dir(path.parent().unwrap(), self.shared)
+            .map_err(|_| unable_to_write_to_cache_error(&self.root))?;
+
+        debug(format!("cache write: {}, {}", hash, path.display()));
+        let file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&path)
+            .map_err(|_| unable_to_write_to_cache_error(&self.root))?;
+
+        let mode = if self.shared { 0o666 } else { 0o600 };
+        let mut file_permissions = file.metadata()?.permissions();
+        file_permissions.set_mode(mode);
+        std::fs::set_permissions(path, file_permissions)?;
+
+        ron::ser::to_writer(file, &entry)
+            .map_err(|_| unable_to_write_to_cache_error(&self.root))?;
+        Ok(())
     }
 }
 
@@ -89,42 +105,68 @@ fn create_cache_dir(path: &Path, shared: bool) -> anyhow::Result<()> {
     Ok(())
 }
 
-impl Cache for DiskCache {
-    fn read(&self, hash: &str) -> anyhow::Result<Option<CommandResult>> {
+#[derive(Debug, Deserialize, Serialize)]
+pub struct DiskCacheEntry {
+    command: Command,
+    created: SystemTime,
+    expires: Option<SystemTime>,
+    status: i32,
+    stdout: Vec<u8>,
+    stderr: Vec<u8>,
+}
+
+impl CommandResult for DiskCacheEntry {
+    fn created(&self) -> SystemTime {
+        self.created
+    }
+
+    fn expires(&self) -> Option<SystemTime> {
+        self.expires
+    }
+
+    fn status(&self) -> i32 {
+        self.status
+    }
+
+    fn stdout(&self) -> &[u8] {
+        &self.stdout
+    }
+
+    fn stderr(&self) -> &[u8] {
+        &self.stderr
+    }
+}
+
+impl Cache<DiskCacheEntry> for DiskCache {
+    fn read(&self, hash: &str) -> anyhow::Result<Option<DiskCacheEntry>> {
         let path = self.path(hash);
         debug(format!("looking for path: {}", path.display()));
         if path.exists() {
             let file =
                 std::fs::File::open(&path).map_err(|_| unable_to_read_cache_entry_error(&path))?;
             let reader = BufReader::new(file);
-            let result: CommandResult = ron::de::from_reader(reader)?;
+            let result: DiskCacheEntry = ron::de::from_reader(reader)?;
             Ok(Some(result))
         } else {
             Ok(None)
         }
     }
 
-    fn write(&self, hash: &str, result: CommandResult) -> anyhow::Result<()> {
-        let path = self.path(hash);
-        create_cache_dir(path.parent().unwrap(), self.shared)
-            .map_err(|_| unable_to_write_to_cache_error(&self.root))?;
-
-        debug(format!("cache write: {}, {}", hash, path.display()));
-        let file = OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(&path)
-            .map_err(|_| unable_to_write_to_cache_error(&self.root))?;
-
-        let mode = if self.shared { 0o666 } else { 0o600 };
-        let mut file_permissions = file.metadata()?.permissions();
-        file_permissions.set_mode(mode);
-        std::fs::set_permissions(path, file_permissions)?;
-
-        ron::ser::to_writer(file, &result)
-            .map_err(|_| unable_to_write_to_cache_error(&self.root))?;
-        Ok(())
+    fn record(&self, command: &mut Command, options: RecordOptions) -> anyhow::Result<i32> {
+        let now = SystemTime::now();
+        let (status, stdout, stderr) = command.run(Vec::new(), Vec::new())?;
+        if options.should_record_status(status) {
+            let entry = DiskCacheEntry {
+                command: command.clone(),
+                created: now,
+                expires: options.cache_for.map(|duration| now + duration),
+                status,
+                stdout,
+                stderr,
+            };
+            self.write(&command.scope.hash, entry)?;
+        }
+        Ok(status)
     }
 
     fn remove(&self, hash: &str) -> anyhow::Result<bool> {

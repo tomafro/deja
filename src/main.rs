@@ -3,9 +3,9 @@ mod command;
 mod deja;
 mod hash;
 
-use crate::cache::Cache;
 use crate::command::Command;
 use anyhow::anyhow;
+use cache::DiskCache;
 use clap::value_parser;
 use clap::Arg;
 use clap::ValueHint;
@@ -369,7 +369,7 @@ fn command(matches: &clap::ArgMatches) -> anyhow::Result<Command> {
     Ok(Command::new(scope.build()?))
 }
 
-fn cache(matches: &clap::ArgMatches) -> anyhow::Result<impl Cache> {
+fn cache(matches: &clap::ArgMatches) -> anyhow::Result<DiskCache> {
     let share_cache = matches.get_flag("share-cache");
     let cache = matches.get_one::<PathBuf>("cache").unwrap();
     let cache_dir = cache.clone();
@@ -398,7 +398,7 @@ fn record_options(matches: &clap::ArgMatches) -> anyhow::Result<RecordOptions> {
         None
     };
 
-    Ok(RecordOptions::new(cache_for, record_exit_codes))
+    Ok(RecordOptions::new(record_exit_codes, cache_for))
 }
 
 fn read_options(matches: &clap::ArgMatches) -> anyhow::Result<ReadOptions> {
