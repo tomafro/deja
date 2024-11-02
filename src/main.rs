@@ -372,7 +372,7 @@ fn cache(matches: &clap::ArgMatches) -> anyhow::Result<DiskCache> {
     let cache = matches.get_one::<PathBuf>("cache").unwrap();
     let cache_dir = cache.clone();
 
-    let cache = cache::DiskCache::new(cache_dir, share_cache);
+    let cache = cache::DiskCache::new(cache_dir, share_cache)?;
 
     Ok(cache)
 }
