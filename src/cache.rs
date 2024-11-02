@@ -8,7 +8,7 @@ use std::fs::OpenOptions;
 use std::io::BufReader;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-use std::time::{Duration, SystemTime};
+use std::time::SystemTime;
 
 pub enum CacheResult<T> {
     Fresh(Box<T>),
@@ -21,23 +21,6 @@ pub trait Cache<T: CommandResult> {
     fn read(&self, hash: &str) -> anyhow::Result<Option<T>>;
     fn remove(&self, hash: &str) -> anyhow::Result<bool>;
     fn record(&self, command: &mut Command, options: RecordOptions) -> anyhow::Result<i32>;
-    fn find(&self, hash: &str, look_back: Option<Duration>) -> anyhow::Result<CacheResult<T>> {
-        if let Some(result) = self.read(hash)? {
-            if result.has_expired() {
-                return Ok(CacheResult::Expired(result.expires().unwrap()));
-            }
-
-            if let Some(duration) = look_back {
-                if result.is_older_than(duration) {
-                    return Ok(CacheResult::Stale(result.created()));
-                }
-            }
-
-            Ok(CacheResult::Fresh(Box::new(result)))
-        } else {
-            Ok(CacheResult::Missing)
-        }
-    }
 }
 
 pub struct DiskCache {

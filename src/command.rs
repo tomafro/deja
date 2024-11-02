@@ -364,15 +364,6 @@ pub trait CommandResult {
     }
 
     fn replay(&self) -> i32 {
-        // let mut stdout = OutputReader {
-        //     reader: BufReader::new(self.stdout()),
-        // };
-
-        // let mut stderr = OutputReader {
-        //     reader: BufReader::new(self.stderr()),
-        // };
-
-        // replay_output(&mut stdout, &mut stderr);
         self.replay_output();
         self.status()
     }

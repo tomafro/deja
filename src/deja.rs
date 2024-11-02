@@ -43,6 +43,31 @@ where
     Ok(cache.record(cmd, options)?)
 }
 
+fn find_in_cache<E>(
+    cmd: &mut Command,
+    cache: &impl Cache<E>,
+    read_options: ReadOptions,
+) -> anyhow::Result<CacheResult<E>>
+where
+    E: CommandResult,
+{
+    if let Some(result) = cache.read(&cmd.scope.hash)? {
+        if result.has_expired() {
+            return Ok(CacheResult::Expired(result.expires().unwrap()));
+        }
+
+        if let Some(duration) = read_options.look_back {
+            if result.is_older_than(duration) {
+                return Ok(CacheResult::Stale(result.created()));
+            }
+        }
+
+        Ok(CacheResult::Fresh(Box::new(result)))
+    } else {
+        Ok(CacheResult::Missing)
+    }
+}
+
 pub fn run<E>(
     cmd: &mut Command,
     cache: &impl Cache<E>,
@@ -52,7 +77,7 @@ pub fn run<E>(
 where
     E: CommandResult,
 {
-    if let CacheResult::Fresh(result) = cache.find(&cmd.scope.hash, read_options.look_back)? {
+    if let CacheResult::Fresh(result) = find_in_cache(cmd, cache, read_options)? {
         Ok(result.replay())
     } else {
         record(cmd, cache, record_options)
@@ -68,7 +93,7 @@ pub fn read<E>(
 where
     E: CommandResult,
 {
-    if let CacheResult::Fresh(result) = cache.find(&cmd.scope.hash, read_options.look_back)? {
+    if let CacheResult::Fresh(result) = find_in_cache(cmd, cache, read_options)? {
         Ok(result.replay())
     } else {
         Ok(cache_miss_exit_code)
@@ -97,7 +122,7 @@ where
 {
     println!("{}", cmd.scope.explanation().explain());
 
-    match cache.find(&cmd.scope.hash, read_options.look_back)? {
+    match find_in_cache(cmd, cache, read_options)? {
         CacheResult::Fresh(_) => {
             println!("Available in cache");
         }
@@ -129,7 +154,7 @@ pub fn test<E>(
 where
     E: CommandResult,
 {
-    if let CacheResult::Fresh(_result) = cache.find(&cmd.scope.hash, read_options.look_back)? {
+    if let CacheResult::Fresh(_result) = find_in_cache(cmd, cache, read_options)? {
         Ok(0)
     } else {
         Ok(1)
