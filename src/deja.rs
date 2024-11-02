@@ -1,8 +1,8 @@
 use crate::cache::Cache;
-use crate::cache::CacheResult;
+use crate::cache::CacheEntry;
 use crate::command::Command;
-use crate::command::CommandResult;
 use std::time::Duration;
+use std::time::SystemTime;
 
 pub struct RecordOptions {
     pub cache_for: Option<Duration>,
@@ -38,33 +38,35 @@ fn record<E>(
     options: RecordOptions,
 ) -> anyhow::Result<i32>
 where
-    E: CommandResult,
+    E: CacheEntry,
 {
-    Ok(cache.record(cmd, options)?)
+    let result = cache.record(cmd, options)?;
+    Ok(result)
 }
 
-fn find_in_cache<E>(
+fn find_any_result_from_cache<E>(
     cmd: &mut Command,
     cache: &impl Cache<E>,
     read_options: ReadOptions,
-) -> anyhow::Result<CacheResult<E>>
+) -> anyhow::Result<CacheResultType<E>>
 where
-    E: CommandResult,
+    E: CacheEntry,
 {
     if let Some(result) = cache.read(&cmd.scope.hash)? {
-        if result.has_expired() {
-            return Ok(CacheResult::Expired(result.expires().unwrap()));
+        if !result.is_fresh() {
+            return Ok(CacheResultType::Expired(result.expires_at().unwrap()));
         }
 
-        if let Some(duration) = read_options.look_back {
-            if result.is_older_than(duration) {
-                return Ok(CacheResult::Stale(result.created()));
-            }
+        if !read_options
+            .look_back
+            .is_none_or(|duration| result.is_younger_than(duration))
+        {
+            return Ok(CacheResultType::TooOld(result.created_at()));
         }
 
-        Ok(CacheResult::Fresh(Box::new(result)))
+        Ok(CacheResultType::Fresh(Box::new(result)))
     } else {
-        Ok(CacheResult::Missing)
+        Ok(CacheResultType::Missing)
     }
 }
 
@@ -75,9 +77,9 @@ pub fn run<E>(
     read_options: ReadOptions,
 ) -> anyhow::Result<i32>
 where
-    E: CommandResult,
+    E: CacheEntry,
 {
-    if let CacheResult::Fresh(result) = find_in_cache(cmd, cache, read_options)? {
+    if let Some(result) = cache.read_fresh(&cmd.scope.hash, read_options.look_back)? {
         Ok(result.replay())
     } else {
         record(cmd, cache, record_options)
@@ -91,9 +93,9 @@ pub fn read<E>(
     cache_miss_exit_code: i32,
 ) -> anyhow::Result<i32>
 where
-    E: CommandResult,
+    E: CacheEntry,
 {
-    if let CacheResult::Fresh(result) = find_in_cache(cmd, cache, read_options)? {
+    if let Some(result) = cache.read_fresh(&cmd.scope.hash, read_options.look_back)? {
         Ok(result.replay())
     } else {
         Ok(cache_miss_exit_code)
@@ -106,7 +108,7 @@ pub fn force<E>(
     record_options: RecordOptions,
 ) -> anyhow::Result<i32>
 where
-    E: CommandResult,
+    E: CacheEntry,
 {
     record(cmd, cache, record_options)?;
     Ok(0)
@@ -118,27 +120,27 @@ pub fn explain<E>(
     read_options: ReadOptions,
 ) -> anyhow::Result<i32>
 where
-    E: CommandResult,
+    E: CacheEntry,
 {
     println!("{}", cmd.scope.explanation().explain());
 
-    match find_in_cache(cmd, cache, read_options)? {
-        CacheResult::Fresh(_) => {
+    match find_any_result_from_cache(cmd, cache, read_options)? {
+        CacheResultType::Fresh(_) => {
             println!("Available in cache");
         }
-        CacheResult::Stale(created) => {
+        CacheResultType::TooOld(created) => {
             println!(
                 "Stale: entry in cache created {} seconds ago",
                 created.elapsed()?.as_secs()
             );
         }
-        CacheResult::Expired(expires_at) => {
+        CacheResultType::Expired(expires_at) => {
             println!(
                 "Expired: entry in cache expired {} seconds ago",
                 expires_at.elapsed()?.as_secs()
             );
         }
-        CacheResult::Missing => {
+        CacheResultType::Missing => {
             println!("Missing from cache");
         }
     }
@@ -152,9 +154,9 @@ pub fn test<E>(
     read_options: ReadOptions,
 ) -> anyhow::Result<i32>
 where
-    E: CommandResult,
+    E: CacheEntry,
 {
-    if let CacheResult::Fresh(_result) = find_in_cache(cmd, cache, read_options)? {
+    if let CacheResultType::Fresh(_result) = find_any_result_from_cache(cmd, cache, read_options)? {
         Ok(0)
     } else {
         Ok(1)
@@ -163,7 +165,7 @@ where
 
 pub fn remove<E>(cmd: &mut Command, cache: &impl Cache<E>) -> anyhow::Result<i32>
 where
-    E: CommandResult,
+    E: CacheEntry,
 {
     if cache.remove(&cmd.scope.hash)? {
         Ok(0)
@@ -174,8 +176,15 @@ where
 
 pub fn hash<E>(cmd: &mut Command, _cache: &impl Cache<E>) -> anyhow::Result<i32>
 where
-    E: CommandResult,
+    E: CacheEntry,
 {
     println!("{}", cmd.scope.hash);
     Ok(0)
+}
+
+pub enum CacheResultType<T> {
+    Fresh(Box<T>),
+    TooOld(SystemTime),
+    Expired(SystemTime),
+    Missing,
 }
