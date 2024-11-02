@@ -1,35 +1,8 @@
 use crate::cache::Cache;
 use crate::cache::CacheEntry;
+use crate::cache::FindOptions;
+use crate::cache::RecordOptions;
 use crate::command::Command;
-use std::time::Duration;
-
-pub struct RecordOptions {
-    pub cache_for: Option<Duration>,
-    record_status_codes: [bool; 256],
-}
-
-impl RecordOptions {
-    pub fn new(record_status_codes: [bool; 256], cache_for: Option<Duration>) -> RecordOptions {
-        RecordOptions {
-            record_status_codes,
-            cache_for,
-        }
-    }
-
-    pub fn should_record_status(&self, status: i32) -> bool {
-        self.record_status_codes[status as usize]
-    }
-}
-
-pub struct ReadOptions {
-    look_back: Option<Duration>,
-}
-
-impl ReadOptions {
-    pub fn new(look_back: Option<Duration>) -> ReadOptions {
-        ReadOptions { look_back }
-    }
-}
 
 fn record<E>(
     cmd: &mut Command,
@@ -39,7 +12,7 @@ fn record<E>(
 where
     E: CacheEntry,
 {
-    let result = cache.record(cmd, options)?;
+    let result = cache.record(cmd, &options)?;
     Ok(result)
 }
 
@@ -47,12 +20,12 @@ pub fn run<E>(
     cmd: &mut Command,
     cache: &impl Cache<E>,
     record_options: RecordOptions,
-    read_options: ReadOptions,
+    read_options: FindOptions,
 ) -> anyhow::Result<i32>
 where
     E: CacheEntry,
 {
-    if let Some(result) = cache.read_fresh(&cmd.scope.hash, read_options.look_back)? {
+    if let Some(result) = cache.find(&cmd.scope.hash, &read_options)? {
         Ok(result.replay())
     } else {
         record(cmd, cache, record_options)
@@ -62,13 +35,13 @@ where
 pub fn read<E>(
     cmd: &mut Command,
     cache: &impl Cache<E>,
-    read_options: ReadOptions,
+    read_options: FindOptions,
     cache_miss_exit_code: i32,
 ) -> anyhow::Result<i32>
 where
     E: CacheEntry,
 {
-    if let Some(result) = cache.read_fresh(&cmd.scope.hash, read_options.look_back)? {
+    if let Some(result) = cache.find(&cmd.scope.hash, &read_options)? {
         Ok(result.replay())
     } else {
         Ok(cache_miss_exit_code)
@@ -90,7 +63,7 @@ where
 pub fn explain<E>(
     cmd: &mut Command,
     cache: &impl Cache<E>,
-    read_options: ReadOptions,
+    read_options: FindOptions,
 ) -> anyhow::Result<i32>
 where
     E: CacheEntry,
@@ -102,10 +75,10 @@ where
             let expires_at_ago = result.expires_at().unwrap().elapsed()?.as_secs();
             format!("Expired: entry in cache expired {expires_at_ago} seconds ago")
         } else if !read_options
-            .look_back
+            .max_age
             .is_none_or(|duration| result.is_younger_than(duration))
         {
-            let look_back_ago = read_options.look_back.unwrap().as_secs();
+            let look_back_ago = read_options.max_age.unwrap().as_secs();
             format!("Stale: entry in cache created {look_back_ago} seconds ago")
         } else {
             format!("Available in cache")
@@ -122,12 +95,12 @@ where
 pub fn test<E>(
     cmd: &mut Command,
     cache: &impl Cache<E>,
-    read_options: ReadOptions,
+    read_options: FindOptions,
 ) -> anyhow::Result<i32>
 where
     E: CacheEntry,
 {
-    if let Some(_result) = cache.read_fresh(&cmd.scope.hash, read_options.look_back)? {
+    if let Some(_result) = cache.find(&cmd.scope.hash, &read_options)? {
         Ok(0)
     } else {
         Ok(1)
