@@ -4,13 +4,13 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::ffi::OsString;
 use std::fmt::Formatter;
-use std::io::{Read, Write};
+use std::io::Write;
 use std::path::PathBuf;
 use std::{
     io::{BufRead, BufReader},
     process::Stdio,
     thread,
-    time::{Instant, SystemTime},
+    time::Instant,
 };
 
 use crate::hash::{self, Hash};
@@ -27,8 +27,8 @@ where
     O: Write + Send + 'static,
 {
     thread::spawn(move || {
-        let mut line = &mut String::new();
-        while let Ok(count) = reader.read_line(&mut line) {
+        let line = &mut String::new();
+        while let Ok(count) = reader.read_line(line) {
             if count == 0 {
                 break;
             }
@@ -317,82 +317,5 @@ impl std::fmt::Display for Command {
             write!(f, " {}", arg)?;
         }
         Ok(())
-    }
-}
-
-pub(crate) fn replay_output(stdout: &mut OutputReader, stderr: &mut OutputReader) {
-    let mut stdout = stdout.peekable();
-    let mut stderr = stderr.peekable();
-
-    loop {
-        match (stdout.peek(), stderr.peek()) {
-            (Some((ot, ol)), Some((et, el))) => {
-                if ot < et {
-                    print!("{}", ol);
-                    stdout.next();
-                } else {
-                    eprint!("{}", el);
-                    stderr.next();
-                }
-            }
-            (Some((_, ol)), None) => {
-                print!("{}", ol);
-                stdout.next();
-            }
-            (None, Some((_, el))) => {
-                eprint!("{}", el);
-                stderr.next();
-            }
-            (None, None) => break,
-        }
-    }
-}
-
-pub trait CommandResult {
-    fn created(&self) -> SystemTime;
-    fn expires(&self) -> Option<SystemTime>;
-    fn status(&self) -> i32;
-    fn replay_output(&self);
-
-    fn has_expired(&self) -> bool {
-        self.expires()
-            .map_or(false, |expires| expires < SystemTime::now())
-    }
-
-    fn is_older_than(&self, look_back: std::time::Duration) -> bool {
-        self.created().elapsed().unwrap() > look_back
-    }
-
-    fn replay(&self) -> i32 {
-        self.replay_output();
-        self.status()
-    }
-}
-
-pub struct OutputReader<'a> {
-    pub reader: BufReader<&'a [u8]>,
-}
-
-impl<'a> Iterator for OutputReader<'a> {
-    type Item = (u128, String);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let mut line = String::new();
-        let mut bytes: [u8; 16] = [0; 16];
-
-        // First 16 bytes are the timestamp
-
-        match self.reader.read_exact(&mut bytes) {
-            Ok(()) => (),
-            Err(_) => return None,
-        }
-
-        // Following the timestamp is the line contents
-
-        match self.reader.read_line(&mut line) {
-            Ok(0) => None,
-            Ok(_) => Some((u128::from_be_bytes(bytes), line.to_string())),
-            Err(_) => None,
-        }
     }
 }
