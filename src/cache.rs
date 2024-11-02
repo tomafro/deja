@@ -21,7 +21,6 @@ pub trait Cache<T: CommandResult> {
     fn read(&self, hash: &str) -> anyhow::Result<Option<T>>;
     fn remove(&self, hash: &str) -> anyhow::Result<bool>;
     fn record(&self, command: &mut Command, options: RecordOptions) -> anyhow::Result<i32>;
-
     fn find(&self, hash: &str, look_back: Option<Duration>) -> anyhow::Result<CacheResult<T>> {
         if let Some(result) = self.read(hash)? {
             if result.has_expired() {
@@ -128,12 +127,16 @@ impl CommandResult for DiskCacheEntry {
         self.status
     }
 
-    fn stdout(&self) -> &[u8] {
-        &self.stdout
-    }
+    fn replay_output(&self) {
+        let mut stdout = crate::command::OutputReader {
+            reader: BufReader::new(self.stdout.as_slice()),
+        };
 
-    fn stderr(&self) -> &[u8] {
-        &self.stderr
+        let mut stderr = crate::command::OutputReader {
+            reader: BufReader::new(self.stderr.as_slice()),
+        };
+
+        crate::command::replay_output(&mut stdout, &mut stderr);
     }
 }
 

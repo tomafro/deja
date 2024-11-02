@@ -320,12 +320,39 @@ impl std::fmt::Display for Command {
     }
 }
 
+pub(crate) fn replay_output(stdout: &mut OutputReader, stderr: &mut OutputReader) {
+    let mut stdout = stdout.peekable();
+    let mut stderr = stderr.peekable();
+
+    loop {
+        match (stdout.peek(), stderr.peek()) {
+            (Some((ot, ol)), Some((et, el))) => {
+                if ot < et {
+                    print!("{}", ol);
+                    stdout.next();
+                } else {
+                    eprint!("{}", el);
+                    stderr.next();
+                }
+            }
+            (Some((_, ol)), None) => {
+                print!("{}", ol);
+                stdout.next();
+            }
+            (None, Some((_, el))) => {
+                eprint!("{}", el);
+                stderr.next();
+            }
+            (None, None) => break,
+        }
+    }
+}
+
 pub trait CommandResult {
     fn created(&self) -> SystemTime;
     fn expires(&self) -> Option<SystemTime>;
     fn status(&self) -> i32;
-    fn stdout(&self) -> &[u8];
-    fn stderr(&self) -> &[u8];
+    fn replay_output(&self);
 
     fn has_expired(&self) -> bool {
         self.expires()
@@ -337,45 +364,22 @@ pub trait CommandResult {
     }
 
     fn replay(&self) -> i32 {
-        let mut stdout = OutputReader {
-            reader: BufReader::new(self.stdout()),
-        }
-        .peekable();
+        // let mut stdout = OutputReader {
+        //     reader: BufReader::new(self.stdout()),
+        // };
 
-        let mut stderr = OutputReader {
-            reader: BufReader::new(self.stderr()),
-        }
-        .peekable();
+        // let mut stderr = OutputReader {
+        //     reader: BufReader::new(self.stderr()),
+        // };
 
-        loop {
-            match (stdout.peek(), stderr.peek()) {
-                (Some((ot, ol)), Some((et, el))) => {
-                    if ot < et {
-                        print!("{}", ol);
-                        stdout.next();
-                    } else {
-                        eprint!("{}", el);
-                        stderr.next();
-                    }
-                }
-                (Some((_, ol)), None) => {
-                    print!("{}", ol);
-                    stdout.next();
-                }
-                (None, Some((_, el))) => {
-                    eprint!("{}", el);
-                    stderr.next();
-                }
-                (None, None) => break,
-            }
-        }
-
+        // replay_output(&mut stdout, &mut stderr);
+        self.replay_output();
         self.status()
     }
 }
 
-struct OutputReader<'a> {
-    reader: BufReader<&'a [u8]>,
+pub struct OutputReader<'a> {
+    pub reader: BufReader<&'a [u8]>,
 }
 
 impl<'a> Iterator for OutputReader<'a> {
