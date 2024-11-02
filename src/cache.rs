@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Error};
+use ron::ser::PrettyConfig;
 use serde::{Deserialize, Serialize};
 use ulid::Ulid;
 
@@ -59,44 +60,46 @@ pub struct DiskCache {
 }
 
 impl DiskCache {
-    pub fn new(root: PathBuf, shared: bool) -> DiskCache {
-        DiskCache { root, shared }
+    pub fn new(root: PathBuf, shared: bool) -> anyhow::Result<DiskCache> {
+        create_cache_dir(root.as_path(), shared)
+            .map_err(|_| unable_to_write_to_cache_error(&root))?;
+        Ok(DiskCache { root, shared })
     }
 
     fn path(&self, hash: &str, suffix: &str) -> std::path::PathBuf {
         self.root.join(format!("{hash}.{suffix}"))
     }
 
-    fn write(&self, hash: &str, entry: DiskCacheEntry) -> anyhow::Result<()> {
-        let path = self.path(hash, "ron");
-        create_cache_dir(self.root.as_path(), self.shared)
-            .map_err(|_| unable_to_write_to_cache_error(&self.root))?;
-
-        debug(format!("cache write: {}, {}", hash, path.display()));
+    fn create_file(&self, path: &PathBuf) -> anyhow::Result<File> {
         let file = OpenOptions::new()
+            .read(true)
             .write(true)
             .create(true)
-            .truncate(true)
             .open(&path)
-            .map_err(|_| unable_to_write_to_cache_error(&self.root))?;
+            .map_err(|_| unable_to_write_to_cache_error(&path))?;
 
         let mode = if self.shared { 0o666 } else { 0o600 };
         let mut file_permissions = file.metadata()?.permissions();
         file_permissions.set_mode(mode);
-        std::fs::set_permissions(path, file_permissions)?;
+        std::fs::set_permissions(&path, file_permissions)?;
+        Ok(file)
+    }
 
-        ron::ser::to_writer(file, &entry)
-            .map_err(|_| unable_to_write_to_cache_error(&self.root))?;
+    fn write(&self, hash: &str, entry: DiskCacheEntry) -> anyhow::Result<()> {
+        let path = self.path(hash, "cache");
+        let file = self.create_file(&path)?;
+        ron::ser::to_writer_pretty(file, &entry, PrettyConfig::default())
+            .map_err(|_| unable_to_write_to_cache_error(&path))?;
         Ok(())
     }
 }
 
 pub fn unable_to_write_to_cache_error(path: &Path) -> Error {
-    anyhow!("unable to write to cache {}", path.display())
+    anyhow!("unable to write file to cache {}", path.display())
 }
 
 pub fn unable_to_read_cache_entry_error(path: &Path) -> Error {
-    anyhow!("unable to read cache entry {}", path.display())
+    anyhow!("unable to read file from cache {}", path.display())
 }
 
 fn create_cache_dir(path: &Path, shared: bool) -> anyhow::Result<()> {
@@ -167,16 +170,14 @@ impl Cache<DiskCacheEntry> for DiskCache {
     }
 
     fn record(&self, command: &mut Command, options: &RecordOptions) -> anyhow::Result<i32> {
-        create_cache_dir(self.root.as_path(), self.shared)
-            .map_err(|_| unable_to_write_to_cache_error(&self.root))?;
         let now = SystemTime::now();
         let ulid: String = Ulid::new().to_string();
 
         let out = self.path(&command.scope.hash, &format!("{ulid}.out"));
         let err = self.path(&command.scope.hash, &format!("{ulid}.err"));
 
-        let out_file = std::fs::File::create(&out)?;
-        let err_file = std::fs::File::create(&err)?;
+        let out_file = self.create_file(&out)?;
+        let err_file = self.create_file(&err)?;
 
         let (status, _, _) = command.run(out_file, err_file)?;
         if options.should_record_status(status) {
