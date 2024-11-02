@@ -4,22 +4,51 @@ use ulid::Ulid;
 
 use crate::command::Command;
 use crate::debug;
-use crate::deja::RecordOptions;
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, Read};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
+pub struct RecordOptions {
+    pub cache_for: Option<Duration>,
+    record_status_codes: [bool; 256],
+}
+
+impl RecordOptions {
+    pub fn new(record_status_codes: [bool; 256], cache_for: Option<Duration>) -> RecordOptions {
+        RecordOptions {
+            record_status_codes,
+            cache_for,
+        }
+    }
+
+    pub fn should_record_status(&self, status: i32) -> bool {
+        self.record_status_codes[status as usize]
+    }
+}
+
+pub struct FindOptions {
+    pub max_age: Option<Duration>,
+}
+
+impl FindOptions {
+    pub fn new(max_age: Option<Duration>) -> FindOptions {
+        FindOptions { max_age }
+    }
+}
+
 pub trait Cache<T: CacheEntry> {
     fn remove(&self, hash: &str) -> anyhow::Result<bool>;
-    fn record(&self, command: &mut Command, options: RecordOptions) -> anyhow::Result<i32>;
+    fn record(&self, command: &mut Command, options: &RecordOptions) -> anyhow::Result<i32>;
     fn read(&self, hash: &str) -> anyhow::Result<Option<T>>;
-    fn read_fresh(&self, hash: &str, max_age: Option<Duration>) -> anyhow::Result<Option<T>> {
+    fn find(&self, hash: &str, options: &FindOptions) -> anyhow::Result<Option<T>> {
         self.read(hash).map(|result| {
-            result
-                .filter(|result| result.is_fresh())
-                .filter(|result| max_age.is_none_or(|duration| result.is_younger_than(duration)))
+            result.filter(|result| result.is_fresh()).filter(|result| {
+                options
+                    .max_age
+                    .is_none_or(|duration| result.is_younger_than(duration))
+            })
         })
     }
 }
@@ -137,7 +166,7 @@ impl Cache<DiskCacheEntry> for DiskCache {
         }
     }
 
-    fn record(&self, command: &mut Command, options: RecordOptions) -> anyhow::Result<i32> {
+    fn record(&self, command: &mut Command, options: &RecordOptions) -> anyhow::Result<i32> {
         create_cache_dir(self.root.as_path(), self.shared)
             .map_err(|_| unable_to_write_to_cache_error(&self.root))?;
         let now = SystemTime::now();

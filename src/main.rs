@@ -3,15 +3,13 @@ mod command;
 mod deja;
 mod hash;
 
+use crate::cache::{DiskCache, FindOptions, RecordOptions};
 use crate::command::Command;
 use anyhow::anyhow;
-use cache::DiskCache;
 use clap::value_parser;
 use clap::Arg;
 use clap::ValueHint;
 use command::ScopeBuilder;
-use deja::ReadOptions;
-use deja::RecordOptions;
 use std::collections::HashMap;
 use std::io;
 use std::path::PathBuf;
@@ -401,7 +399,7 @@ fn record_options(matches: &clap::ArgMatches) -> anyhow::Result<RecordOptions> {
     Ok(RecordOptions::new(record_exit_codes, cache_for))
 }
 
-fn read_options(matches: &clap::ArgMatches) -> anyhow::Result<ReadOptions> {
+fn read_options(matches: &clap::ArgMatches) -> anyhow::Result<FindOptions> {
     let look_back = if let Some(s) = matches.get_one::<String>("look-back") {
         Some(humantime::parse_duration(s).map_err(|_| {
             anyhow!(
@@ -413,7 +411,7 @@ fn read_options(matches: &clap::ArgMatches) -> anyhow::Result<ReadOptions> {
         None
     };
 
-    Ok(ReadOptions::new(look_back))
+    Ok(FindOptions::new(look_back))
 }
 
 fn run() -> anyhow::Result<i32> {
