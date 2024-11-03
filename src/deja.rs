@@ -25,7 +25,7 @@ pub fn run<E>(
 where
     E: CacheEntry,
 {
-    if let Some(result) = cache.find(&cmd.scope.hash, &read_options)? {
+    if let Some(result) = cache.find(cmd.hash(), &read_options)? {
         Ok(result.replay())
     } else {
         record(cmd, cache, record_options)
@@ -41,7 +41,7 @@ pub fn read<E>(
 where
     E: CacheEntry,
 {
-    if let Some(result) = cache.find(&cmd.scope.hash, &read_options)? {
+    if let Some(result) = cache.find(cmd.hash(), &read_options)? {
         Ok(result.replay())
     } else {
         Ok(cache_miss_exit_code)
@@ -70,7 +70,7 @@ where
 {
     println!("{}", cmd.scope.explanation().explain());
 
-    let hash = &cmd.scope.hash;
+    let hash = cmd.hash();
 
     let description = if let Some(result) = cache.read(hash)? {
         if !result.is_fresh() {
@@ -102,7 +102,7 @@ pub fn test<E>(
 where
     E: CacheEntry,
 {
-    if let Some(_result) = cache.find(&cmd.scope.hash, &read_options)? {
+    if let Some(_result) = cache.find(cmd.hash(), &read_options)? {
         Ok(0)
     } else {
         Ok(1)
@@ -113,7 +113,7 @@ pub fn remove<E>(cmd: &mut Command, cache: &impl Cache<E>) -> anyhow::Result<i32
 where
     E: CacheEntry,
 {
-    if cache.remove(&cmd.scope.hash)? {
+    if cache.remove(cmd.hash())? {
         Ok(0)
     } else {
         Ok(1)
@@ -124,6 +124,6 @@ pub fn hash<E>(cmd: &mut Command, _cache: &impl Cache<E>) -> anyhow::Result<i32>
 where
     E: CacheEntry,
 {
-    println!("{}", cmd.scope.hash);
+    println!("{}", cmd.hash());
     Ok(0)
 }

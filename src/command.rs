@@ -1,7 +1,7 @@
 use anyhow::anyhow;
 use core::str;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::ffi::OsString;
 use std::fmt::Formatter;
 use std::io::Write;
@@ -50,15 +50,15 @@ where
 
 #[derive(Debug, Deserialize, Serialize, Default, Clone)]
 pub struct ScopeBuilder {
-    pub format: String,
-    pub cmd: String,
-    pub args: Vec<String>,
-    pub shared: bool,
-    pub user: Option<String>,
-    pub pwd: Option<OsString>,
-    pub watch_paths: Vec<PathBuf>,
-    pub watch_scope: Vec<String>,
-    pub watch_env: HashMap<String, String>,
+    format: String,
+    cmd: String,
+    args: Vec<String>,
+    shared: bool,
+    user: Option<String>,
+    pwd: Option<OsString>,
+    watch_paths: Vec<PathBuf>,
+    watch_scope: HashSet<String>,
+    watch_env: HashMap<String, String>,
 }
 
 impl ScopeBuilder {
@@ -70,13 +70,13 @@ impl ScopeBuilder {
         }
     }
 
-    pub fn cmd(mut self, cmd: String) -> Self {
-        self.cmd = cmd;
+    pub fn cmd(mut self, cmd: impl Into<String>) -> Self {
+        self.cmd = cmd.into();
         self
     }
 
-    pub fn args(mut self, args: Vec<String>) -> Self {
-        self.args = args;
+    pub fn args<T>(mut self, args: impl IntoArgs<T>) -> Self {
+        self.args = args.into_args();
         self
     }
 
@@ -85,8 +85,8 @@ impl ScopeBuilder {
         self
     }
 
-    pub fn user(mut self, user: String) -> Self {
-        self.user = Some(user);
+    pub fn user(mut self, user: impl Into<String>) -> Self {
+        self.user = Some(user.into());
         self
     }
 
@@ -100,13 +100,13 @@ impl ScopeBuilder {
         self
     }
 
-    pub fn watch_scope(mut self, watch_scope: Vec<String>) -> Self {
-        self.watch_scope = watch_scope;
+    pub fn watch_scope(mut self, watch_scope: impl IntoWatchScope) -> Self {
+        self.watch_scope = watch_scope.into_watch_scope();
         self
     }
 
-    pub fn watch_env(mut self, watch_env: HashMap<String, String>) -> Self {
-        self.watch_env = watch_env;
+    pub fn watch_env<T>(mut self, watch_env: impl IntoEnv<T>) -> Self {
+        self.watch_env = watch_env.into_env();
         self
     }
 
@@ -151,15 +151,80 @@ impl ScopeBuilder {
 
 #[derive(Debug, Deserialize, Serialize, Default, Clone)]
 pub struct Scope {
-    pub format: String,
-    pub cmd: String,
-    pub args: Vec<String>,
-    pub user: Option<String>,
-    pub pwd: Option<OsString>,
-    pub watch_paths: Vec<PathBuf>,
-    pub watch_scope: Vec<String>,
-    pub watch_env: HashMap<String, String>,
-    pub hash: String,
+    format: String,
+    cmd: String,
+    args: Vec<String>,
+    user: Option<String>,
+    pwd: Option<OsString>,
+    watch_paths: Vec<PathBuf>,
+    watch_scope: HashSet<String>,
+    watch_env: HashMap<String, String>,
+    hash: String,
+}
+
+pub trait IntoArgs<T> {
+    fn into_args(self) -> Vec<String>;
+}
+
+impl IntoArgs<Vec<String>> for Vec<String> {
+    fn into_args(self) -> Vec<String> {
+        self
+    }
+}
+
+impl IntoArgs<String> for String {
+    fn into_args(self) -> Vec<String> {
+        self.split_whitespace().map(|s| s.to_string()).collect()
+    }
+}
+
+impl IntoArgs<String> for &str {
+    fn into_args(self) -> Vec<String> {
+        self.split_whitespace().map(|s| s.to_string()).collect()
+    }
+}
+
+pub trait IntoEnv<T> {
+    fn into_env(self) -> HashMap<String, String>;
+}
+
+impl IntoEnv<HashMap<String, String>> for HashMap<String, String> {
+    fn into_env(self) -> HashMap<String, String> {
+        self
+    }
+}
+
+impl IntoEnv<HashMap<String, String>> for String {
+    fn into_env(self) -> HashMap<String, String> {
+        self.split_whitespace()
+            .filter_map(|pair| {
+                pair.split_once('=')
+                    .map(|(key, value)| (key.to_string(), value.to_string()))
+            })
+            .collect()
+    }
+}
+
+impl IntoEnv<HashMap<String, String>> for &str {
+    fn into_env(self) -> HashMap<String, String> {
+        self.to_string().into_env()
+    }
+}
+
+pub trait IntoWatchScope {
+    fn into_watch_scope(self) -> HashSet<String>;
+}
+
+impl IntoWatchScope for HashSet<String> {
+    fn into_watch_scope(self) -> HashSet<String> {
+        self
+    }
+}
+
+impl IntoWatchScope for Vec<String> {
+    fn into_watch_scope(self) -> HashSet<String> {
+        self.into_iter().collect()
+    }
 }
 
 impl Scope {
@@ -252,6 +317,10 @@ impl Command {
         Command { ulid, scope }
     }
 
+    pub fn hash(&self) -> &str {
+        &self.scope.hash
+    }
+
     pub fn run<O, E>(&mut self, stdout_capture: O, stderr_capture: E) -> anyhow::Result<(i32, O, E)>
     where
         O: Write + Send + 'static,
@@ -319,6 +388,140 @@ impl std::fmt::Display for Command {
         for arg in &self.scope.args {
             write!(f, " {}", arg)?;
         }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    fn assert_unique<T>(elements: Vec<T>)
+    where
+        T: Eq + Ord + Clone,
+    {
+        let mut sorted = elements.clone();
+        sorted.sort();
+        sorted.dedup();
+        assert_eq!(elements.len(), sorted.len(), "elements are unique");
+    }
+
+    fn scope() -> ScopeBuilder {
+        ScopeBuilder::new()
+    }
+
+    #[test]
+    fn test_scope() {
+        let cmds = vec!["echo", "cat", "ls"];
+        let mut hashes = cmds
+            .iter()
+            .map(|cmd| ScopeBuilder::new().cmd(cmd.to_string()).hash().unwrap())
+            .collect::<Vec<_>>();
+
+        hashes.sort();
+        hashes.dedup();
+
+        assert_eq!(
+            cmds.len(),
+            hashes.len(),
+            "hashes for each command are unique"
+        );
+    }
+
+    #[test]
+    fn test_scope_empty() -> anyhow::Result<()> {
+        assert_eq!(scope().hash()?, scope().hash()?, "empty scopes are equal");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_scope_shared() -> anyhow::Result<()> {
+        assert_eq!(
+            scope().shared(true).hash()?,
+            scope().shared(true).hash()?,
+            "hashes are equal when shared"
+        );
+
+        assert_eq!(
+            scope().shared(false).hash()?,
+            scope().shared(false).hash()?,
+            "hashes are equal when not shared"
+        );
+
+        assert_ne!(
+            scope().shared(false).hash()?,
+            scope().shared(true).hash()?,
+            "hashes are not equal when sharing status is different"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_scopes() -> anyhow::Result<()> {
+        assert_unique(vec![
+            scope().cmd("echo").hash()?,
+            scope().cmd("echo").args("--arg").hash()?,
+            scope().cmd("echo").args("--one").hash()?,
+            scope().cmd("echo").args("--one --two").hash()?,
+            scope().cmd("echo").args("--two --one").hash()?,
+            scope().cmd("echo").watch_env("A=1").hash()?,
+            scope().cmd("echo").watch_env("B=1").hash()?,
+            scope().cmd("echo").watch_env("A=1 B=1").hash()?,
+        ]);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_scope_env() -> anyhow::Result<()> {
+        assert_eq!(
+            scope().watch_env("A=1 B=2").hash()?,
+            scope().watch_env("B=2 A=1").hash()?,
+            "hashes are equal regardless of order of env vars"
+        );
+
+        assert_ne!(
+            scope().watch_env("A=2 B=2").hash()?,
+            scope().watch_env("B=2 A=1").hash()?,
+            "hashes are different when env vars are different"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_scope_args() -> anyhow::Result<()> {
+        assert_ne!(
+            scope().args("--one").hash()?,
+            scope().args("--two").hash()?,
+            "hashes are different when args are different"
+        );
+
+        assert_ne!(
+            scope().args("--one --two").hash()?,
+            scope().args("--two --one").hash()?,
+            "hashes are different when args are in different order"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_scope_scope() -> anyhow::Result<()> {
+        assert_ne!(
+            scope().watch_scope(vec!["a".into(), "b".into()]).hash()?,
+            scope().watch_scope(vec!["a".into(), "c".into()]).hash()?,
+            "hashes are different when scopes are different"
+        );
+
+        assert_eq!(
+            scope().watch_scope(vec!["a".into(), "b".into()]).hash()?,
+            scope().watch_scope(vec!["b".into(), "a".into()]).hash()?,
+            "hashes are equal regardless of order of scopes"
+        );
+
         Ok(())
     }
 }
