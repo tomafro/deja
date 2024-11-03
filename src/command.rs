@@ -12,6 +12,7 @@ use std::{
     thread,
     time::Instant,
 };
+use ulid::Ulid;
 
 use crate::hash::{self, Hash};
 
@@ -241,12 +242,14 @@ impl<'a> ScopeExplanation<'a> {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Command {
+    pub ulid: String,
     pub scope: Scope,
 }
 
 impl Command {
     pub fn new(scope: Scope) -> Self {
-        Command { scope }
+        let ulid = Ulid::new().to_string();
+        Command { ulid, scope }
     }
 
     pub fn run<O, E>(&mut self, stdout_capture: O, stderr_capture: E) -> anyhow::Result<(i32, O, E)>
