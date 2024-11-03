@@ -1,7 +1,6 @@
 use anyhow::{anyhow, Error};
 use ron::ser::PrettyConfig;
 use serde::{Deserialize, Serialize};
-use ulid::Ulid;
 
 use crate::command::Command;
 use crate::debug;
@@ -193,7 +192,7 @@ impl Cache<DiskCacheEntry> for DiskCache {
 
     fn record(&self, command: &mut Command, options: &RecordOptions) -> anyhow::Result<i32> {
         let now = SystemTime::now();
-        let ulid: String = Ulid::new().to_string();
+        let ulid = &command.ulid;
 
         let out = self.path(&command.scope.hash, &format!("{ulid}.out"));
         let err = self.path(&command.scope.hash, &format!("{ulid}.err"));
