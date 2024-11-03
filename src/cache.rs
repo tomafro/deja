@@ -43,6 +43,7 @@ impl Default for RecordOptions {
     }
 }
 
+#[derive(Default)]
 pub struct FindOptions {
     /// The maximum age of a cached result to consider. Results older than this will be ignored.
     pub max_age: Option<Duration>,
@@ -51,12 +52,6 @@ pub struct FindOptions {
 impl FindOptions {
     pub fn set_max_age(&mut self, s: Option<Duration>) {
         self.max_age = s;
-    }
-}
-
-impl Default for FindOptions {
-    fn default() -> Self {
-        FindOptions { max_age: None }
     }
 }
 
@@ -96,13 +91,14 @@ impl DiskCache {
             .read(true)
             .write(true)
             .create(true)
-            .open(&path)
-            .map_err(|_| unable_to_write_to_cache_error(&path))?;
+            .truncate(true)
+            .open(path)
+            .map_err(|_| unable_to_write_to_cache_error(path))?;
 
         let mode = if self.shared { 0o666 } else { 0o600 };
         let mut file_permissions = file.metadata()?.permissions();
         file_permissions.set_mode(mode);
-        std::fs::set_permissions(&path, file_permissions)?;
+        std::fs::set_permissions(path, file_permissions)?;
         Ok(file)
     }
 

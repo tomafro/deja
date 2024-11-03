@@ -70,7 +70,9 @@ where
 {
     println!("{}", cmd.scope.explanation().explain());
 
-    let description = if let Some(result) = cache.read(&cmd.scope.hash)? {
+    let hash = &cmd.scope.hash;
+
+    let description = if let Some(result) = cache.read(hash)? {
         if !result.is_fresh() {
             let expires_at_ago = result.expires_at().unwrap().elapsed()?.as_secs();
             format!("Expired: entry in cache expired {expires_at_ago} seconds ago")
@@ -78,13 +80,13 @@ where
             .max_age
             .is_none_or(|duration| result.is_younger_than(duration))
         {
-            let look_back_ago = read_options.max_age.unwrap().as_secs();
-            format!("Stale: entry in cache created {look_back_ago} seconds ago")
+            let max_age = read_options.max_age.unwrap().as_secs();
+            format!("Stale: entry in cache created longer than {max_age} seconds ago")
         } else {
-            format!("Available in cache")
+            format!("Fresh: entry for {hash} available in cache")
         }
     } else {
-        format!("Expired: ")
+        format!("Missing: no entry found in cache for {hash}")
     };
 
     println!("{}", description);
