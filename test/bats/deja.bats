@@ -205,7 +205,7 @@ setup() {
 @test "run (error: unable to write to cache)" {
   deja run --cache /missing/folder -- mock-command
   assert_handled_failure "fails when unknown command"
-  assert_equal "$stderr" "deja: unable to write to cache /missing/folder"
+  assert_equal "$stderr" "deja: unable to write file to cache /missing/folder"
 }
 
 @test "run (error: unable to read from cache)" {
@@ -216,7 +216,7 @@ setup() {
   deja run -- mock-command
 
   assert_handled_failure "fails when unable to read cache entry"
-  assert_regex "$stderr" "deja: unable to read cache entry $DEJA_CACHE/.*"
+  assert_regex "$stderr" "deja: unable to read file from cache $DEJA_CACHE/.*"
 }
 
 @test "run --look-back (error: invalid duration)" {
