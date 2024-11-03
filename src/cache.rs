@@ -190,8 +190,8 @@ impl Cache<DiskCacheEntry> for DiskCache {
         let now = SystemTime::now();
         let ulid = &command.ulid;
 
-        let out = self.path(&command.scope.hash, &format!("{ulid}.out"));
-        let err = self.path(&command.scope.hash, &format!("{ulid}.err"));
+        let out = self.path(command.hash(), &format!("{ulid}.out"));
+        let err = self.path(command.hash(), &format!("{ulid}.err"));
 
         let out_file = self.create_file(&out)?;
         let err_file = self.create_file(&err)?;
@@ -212,12 +212,12 @@ impl Cache<DiskCacheEntry> for DiskCache {
                 stderr: err,
             };
 
-            if let Some(existing) = self.read(&command.scope.hash)? {
+            if let Some(existing) = self.read(command.hash())? {
                 std::fs::remove_file(existing.stdout)?;
                 std::fs::remove_file(existing.stderr)?;
             }
 
-            self.write(&command.scope.hash, entry)?;
+            self.write(command.hash(), entry)?;
         } else {
             std::fs::remove_file(&out)?;
             std::fs::remove_file(&err)?;

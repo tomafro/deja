@@ -1,5 +1,9 @@
 use std::{
-    collections::HashMap, error::Error, ffi::OsString, os::unix::ffi::OsStrExt, path::PathBuf,
+    collections::{HashMap, HashSet},
+    error::Error,
+    ffi::OsString,
+    os::unix::ffi::OsStrExt,
+    path::PathBuf,
 };
 
 use merkle_hash::{Algorithm, MerkleTree};
@@ -64,8 +68,8 @@ impl From<&Option<String>> for Hash {
     }
 }
 
-impl From<&std::option::Option<OsString>> for Hash {
-    fn from(s: &std::option::Option<OsString>) -> Self {
+impl From<&Option<OsString>> for Hash {
+    fn from(s: &Option<OsString>) -> Self {
         if let Some(s) = s {
             Hash::from(s.as_bytes())
         } else {
@@ -168,11 +172,35 @@ impl From<&HashMap<String, String>> for Hash {
     }
 }
 
+impl From<&HashSet<String>> for Hash {
+    fn from(map: &HashSet<String>) -> Self {
+        let mut entries = map.iter().collect::<Vec<&String>>();
+        entries.sort();
+        let hashes = entries
+            .iter()
+            .map(|e| Hash::from(e.as_bytes()))
+            .collect::<Vec<Hash>>();
+        Hash::from(&hashes)
+    }
+}
+
 #[cfg(test)]
 mod test {
+    use super::*;
     use std::path::Path;
 
-    use super::*;
+    #[test]
+    fn test_from_bool() {
+        assert_eq!(
+            "acc8a7699a2bf4cbd05f69678eac4fc236572041c28dfd0ab558e5fcf2ab6540",
+            Hash::from(true).hex()
+        );
+
+        assert_eq!(
+            "401f18ad0cca38559086c36f9e0295f1ca3a7023e5f095aeef69177a9b8f10ce",
+            Hash::from(false).hex()
+        );
+    }
 
     #[test]
     fn test_from_string() {
