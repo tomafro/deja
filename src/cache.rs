@@ -86,7 +86,7 @@ impl DiskCache {
     }
 
     fn write(&self, hash: &str, entry: DiskCacheEntry) -> anyhow::Result<()> {
-        let path = self.path(hash, "cache");
+        let path = self.path(hash, "ron");
         let file = self.create_file(&path)?;
         ron::ser::to_writer_pretty(file, &entry, PrettyConfig::default())
             .map_err(|_| unable_to_write_to_cache_error(&path))?;
