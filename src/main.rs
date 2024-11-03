@@ -16,6 +16,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use std::sync::OnceLock;
+use std::time::Duration;
 
 pub static DEBUG: OnceLock<bool> = OnceLock::new();
 
@@ -377,41 +378,37 @@ fn cache(matches: &clap::ArgMatches) -> anyhow::Result<DiskCache> {
     Ok(cache)
 }
 
+fn parse_duration(d: &str) -> anyhow::Result<Duration> {
+    humantime::parse_duration(d).map_err(|_| {
+        anyhow!(
+            "invalid duration '{}', use values like 15s, 30m, 3h, 4d etc",
+            d
+        )
+    })
+}
+
 fn record_options(matches: &clap::ArgMatches) -> anyhow::Result<RecordOptions> {
-    let record_exit_codes = if let Some(exit_codes) = matches.get_one::<String>("record-exit-codes")
-    {
-        parse_exit_codes(exit_codes)
-    } else {
-        parse_exit_codes("0")
+    let mut options = RecordOptions::default();
+
+    if let Some(exit_codes) = matches.get_one::<String>("record-exit-codes") {
+        options.set_exit_codes(parse_exit_codes(exit_codes));
     };
 
-    let cache_for = if let Some(s) = matches.get_one::<String>("cache-for") {
-        Some(humantime::parse_duration(s).map_err(|_| {
-            anyhow!(
-                "invalid duration '{}', use values like 15s, 30m, 3h, 4d etc",
-                s
-            )
-        })?)
-    } else {
-        None
+    if let Some(s) = matches.get_one::<String>("cache-for") {
+        options.set_cache_for(Some(parse_duration(s)?));
     };
 
-    Ok(RecordOptions::new(record_exit_codes, cache_for))
+    Ok(options)
 }
 
 fn read_options(matches: &clap::ArgMatches) -> anyhow::Result<FindOptions> {
-    let look_back = if let Some(s) = matches.get_one::<String>("look-back") {
-        Some(humantime::parse_duration(s).map_err(|_| {
-            anyhow!(
-                "invalid duration '{}', use values like 15s, 30m, 3h, 4d etc",
-                s
-            )
-        })?)
-    } else {
-        None
+    let mut options = FindOptions::default();
+
+    if let Some(s) = matches.get_one::<String>("look-back") {
+        options.set_max_age(Some(parse_duration(s)?));
     };
 
-    Ok(FindOptions::new(look_back))
+    Ok(options)
 }
 
 fn run() -> anyhow::Result<i32> {

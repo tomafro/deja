@@ -12,30 +12,52 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
 pub struct RecordOptions {
-    pub cache_for: Option<Duration>,
-    record_status_codes: [bool; 256],
+    /// The duration to cache a recorded result for.
+    cache_for: Option<Duration>,
+    /// Array of exit codes to record, where the index is the exit code (so when `exit_codes[0] == true` we record the result for exit code 0).
+    exit_codes: [bool; 256],
 }
 
 impl RecordOptions {
-    pub fn new(record_status_codes: [bool; 256], cache_for: Option<Duration>) -> RecordOptions {
-        RecordOptions {
-            record_status_codes,
-            cache_for,
-        }
+    pub fn set_exit_codes(&mut self, exit_codes: [bool; 256]) {
+        self.exit_codes = exit_codes;
     }
 
-    pub fn should_record_status(&self, status: i32) -> bool {
-        self.record_status_codes[status as usize]
+    pub fn set_cache_for(&mut self, cache_for: Option<Duration>) {
+        self.cache_for = cache_for;
+    }
+
+    pub fn should_record(&self, exit_code: i32) -> bool {
+        self.exit_codes[exit_code as usize]
+    }
+}
+
+impl Default for RecordOptions {
+    fn default() -> Self {
+        let mut exit_codes = [false; 256];
+        exit_codes[0] = true;
+
+        RecordOptions {
+            exit_codes,
+            cache_for: None,
+        }
     }
 }
 
 pub struct FindOptions {
+    /// The maximum age of a cached result to consider. Results older than this will be ignored.
     pub max_age: Option<Duration>,
 }
 
 impl FindOptions {
-    pub fn new(max_age: Option<Duration>) -> FindOptions {
-        FindOptions { max_age }
+    pub fn set_max_age(&mut self, s: Option<Duration>) {
+        self.max_age = s;
+    }
+}
+
+impl Default for FindOptions {
+    fn default() -> Self {
+        FindOptions { max_age: None }
     }
 }
 
@@ -180,7 +202,8 @@ impl Cache<DiskCacheEntry> for DiskCache {
         let err_file = self.create_file(&err)?;
 
         let (status, _, _) = command.run(out_file, err_file)?;
-        if options.should_record_status(status) {
+
+        if options.should_record(status) {
             let meta = DiskCacheEntryMeta {
                 command: command.clone(),
                 created: now,
